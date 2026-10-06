@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { CITIES } from "@/lib/cities";
+import type { Area, Place } from "@/lib/area";
 import { addDays, fmtMonthYear, fmtRange, shortcutRanges, weekday } from "@/lib/dates";
 import type { Prefs } from "@/lib/device";
 import type { Moment } from "@/lib/types";
@@ -21,12 +21,16 @@ interface Props {
   onClose: () => void;
   onRun: () => void;
   onGeo: () => void;
+  onPickPlace: (p: Place) => void;
+  recent: Area[];
+  onPickArea: (a: Area) => void;
+  busy: boolean;
   flash: (s: string) => void;
 }
 
 const MOMENTS: Moment[] = ["m", "a", "s"];
 
-export function SearchSheet({ prefs, setPrefs, step, setStep, today, count, onClose, onRun, onGeo, flash }: Props) {
+export function SearchSheet({ prefs, setPrefs, step, setStep, today, count, onClose, onRun, onGeo, onPickPlace, recent, onPickArea, busy, flash }: Props) {
   const t = useTranslations("search");
   const tm = useTranslations("moments");
   const tc = useTranslations("categories");
@@ -38,7 +42,27 @@ export function SearchSheet({ prefs, setPrefs, step, setStep, today, count, onCl
 
   const from = prefs.from ?? today;
   const toDay = prefs.to ?? from;
-  const cityName = CITIES.find((c) => c.slug === prefs.city)?.name ?? prefs.city;
+  const cityName = prefs.area?.name ?? t("chooseCity");
+  const [results, setResults] = useState<Place[]>([]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/geo/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : { places: [] }))
+        .then((d: { places: Place[] }) => setResults(d.places))
+        .catch(() => {});
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [query]);
   const momTxt = prefs.moments.map((m) => tm(`${m}.name`)).join(", ");
   const whenSum = fmtRange(from, toDay, locale) + (momTxt ? ` · ${momTxt}` : "");
   const catsInline = prefs.cats.length ? prefs.cats.map((c) => tc(`${c}.name`)).join(", ") : t("noCategory");
@@ -80,7 +104,6 @@ export function SearchSheet({ prefs, setPrefs, step, setStep, today, count, onCl
     }
   };
 
-  const suggestions = CITIES.filter((c) => !query || c.name.toLowerCase().startsWith(query.toLowerCase()));
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-paper">
@@ -116,27 +139,43 @@ export function SearchSheet({ prefs, setPrefs, step, setStep, today, count, onCl
                   <span className="text-[13px] leading-tight text-muted">{t("useMyPosition")}</span>
                 </span>
               </button>
-              {suggestions.map((c) => (
+              {(query.trim().length >= 2 ? results : []).map((p) => (
                 <button
-                  key={c.slug}
+                  key={`${p.name}-${p.countryCode}-${p.lat}`}
                   type="button"
+                  disabled={busy}
                   onClick={() => {
-                    if (!c.active) return flash(t("soonToast", { city: c.name }));
-                    setPrefs({ city: c.slug, geo: null });
                     setQuery("");
-                    setStep("when");
+                    onPickPlace(p);
                   }}
-                  className={`flex min-h-14 items-center gap-3.5 border-0 bg-transparent p-0 text-left ${c.active ? "cursor-pointer" : "cursor-default"}`}
+                  className="flex min-h-14 cursor-pointer items-center gap-3.5 border-0 bg-transparent p-0 text-left disabled:opacity-50"
                 >
                   <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-sand text-[14px] leading-none font-semibold text-muted">
-                    {c.name[0]}
+                    {p.name[0]}
                   </span>
                   <span className="flex flex-col gap-0.5">
-                    <span className={`text-[15px] leading-tight font-semibold ${c.active ? "text-ink" : "text-faint"}`}>{c.name}</span>
-                    <span className="text-[13px] leading-tight text-muted">{c.active ? t("pilot") : t("soon")}</span>
+                    <span className="text-[15px] leading-tight font-semibold text-ink">{p.name}</span>
+                    <span className="text-[13px] leading-tight text-muted">{[p.region, p.country].filter(Boolean).join(", ")}</span>
                   </span>
                 </button>
               ))}
+              {query.trim().length < 2 &&
+                recent.map((a) => (
+                  <button
+                    key={a.slug}
+                    type="button"
+                    onClick={() => onPickArea(a)}
+                    className="flex min-h-14 cursor-pointer items-center gap-3.5 border-0 bg-transparent p-0 text-left"
+                  >
+                    <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-sand text-[14px] leading-none font-semibold text-muted">
+                      {a.name[0]}
+                    </span>
+                    <span className="flex flex-col gap-0.5">
+                      <span className="text-[15px] leading-tight font-semibold text-ink">{a.name}</span>
+                      <span className="text-[13px] leading-tight text-muted">{t("recent")}</span>
+                    </span>
+                  </button>
+                ))}
             </div>
           </div>
         ) : (

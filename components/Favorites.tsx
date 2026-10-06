@@ -7,12 +7,11 @@ import { EventImage, StatusBadge, usePriceShort } from "./ui";
 
 interface Props {
   favs: EventItem[];
-  tz: string;
   onOpen: (e: EventItem) => void;
   onRemove: (e: EventItem) => void;
 }
 
-export function Favorites({ favs, tz, onOpen, onRemove }: Props) {
+export function Favorites({ favs, onOpen, onRemove }: Props) {
   const t = useTranslations("favs");
   const tc = useTranslations("card");
   const locale = useLocale();
@@ -37,7 +36,7 @@ export function Favorites({ favs, tz, onOpen, onRemove }: Props) {
                 <EventImage src={e.imageUrl} alt="" className="h-[72px] w-[72px]" rounded="rounded-[10px]" />
                 <div className="flex min-w-0 flex-col gap-[3px] pr-9">
                   <h3 className="m-0 text-[15px] leading-tight font-semibold">{e.title}</h3>
-                  <span className="text-[13.5px] leading-[1.3] font-medium">{whenShort(e, null, tz, locale, (date) => tc("until", { date }))}</span>
+                  <span className="text-[13.5px] leading-[1.3] font-medium">{whenShort(e, null, e.timezone, locale, (date) => tc("until", { date }))}</span>
                   <div className="flex items-center gap-2 pt-0.5">
                     <span className="text-[13px] leading-[1.3] text-muted">{price(e)}</span>
                     {past ? (

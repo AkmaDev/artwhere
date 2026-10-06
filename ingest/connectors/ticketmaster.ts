@@ -77,7 +77,6 @@ export const ticketmaster: Connector = {
           latlong: `${city.lat},${city.lng}`,
           radius: String(Math.round(city.radiusKm)),
           unit: "km",
-          countryCode: city.country,
           classificationName: segment,
           startDateTime: start,
           endDateTime: end,
@@ -107,12 +106,13 @@ export const ticketmaster: Connector = {
             continue;
           }
           const endAt = e.dates?.end?.dateTime && e.dates.end.dateTime > startAt ? e.dates.end.dateTime : new Date(new Date(startAt).getTime() + 2 * 3600e3).toISOString();
-          const prices = (e.priceRanges ?? []).filter((p) => p.currency === "EUR" || !p.currency);
+          const prices = (e.priceRanges ?? []).filter((p) => p.currency === city.currency || !p.currency);
           const img = [...(e.images ?? [])].filter((i) => i.ratio === "16_9").sort((a, b) => b.width - a.width).find((i) => i.width <= 1200);
           const address = [v?.address?.line1, [v?.postalCode, v?.city?.name].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 
           out.push({
             source: "ticketmaster",
+            kind: "event",
             sourceId: e.id,
             sourceUrl: e.url!,
             raw: e,

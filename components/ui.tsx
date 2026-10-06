@@ -40,11 +40,11 @@ export function NewBadge({ size = "md" }: { size?: "md" | "sm" }) {
 export function usePriceShort() {
   const t = useTranslations("card");
   const locale = useLocale();
-  return (e: Pick<EventItem, "priceMin" | "priceMax">) => {
+  return (e: Pick<EventItem, "priceMin" | "priceMax" | "currency">) => {
     if (e.priceMin == null) return t("priceUnknown");
     if (e.priceMin === 0) return t("free");
-    if (e.priceMax != null && e.priceMax > e.priceMin) return t("from", { price: money(e.priceMin, locale) });
-    return money(e.priceMin, locale);
+    if (e.priceMax != null && e.priceMax > e.priceMin) return t("from", { price: money(e.priceMin, locale, e.currency) });
+    return money(e.priceMin, locale, e.currency);
   };
 }
 

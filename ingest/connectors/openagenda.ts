@@ -1,3 +1,4 @@
+import { haversineKm } from "../../lib/area";
 import type { CategoryId } from "../../lib/categories";
 import type { EventStatus } from "../../lib/types";
 import { fmtDuration, fmtHourRange, isHttpUrl, looksOngoing, normText, parsePrices, stripHtml, truncate } from "../normalize";
@@ -47,7 +48,7 @@ function categoriesFor(text: string): CategoryId[] {
 // 1 programmé, 2 reprogrammé, 3 en ligne, 4 reporté, 5 complet, 6 annulé
 const STATUS: Record<number, EventStatus> = { 1: "available", 2: "available", 4: "cancelled", 5: "full", 6: "cancelled" };
 
-/** Agendas OpenAgenda suivis par ville (UID). À compléter avec les agendas des offices de tourisme / villes. */
+/** Agendas imposés pour certaines zones ; ailleurs, découverte automatique par nom de ville. */
 export const OPENAGENDA_AGENDAS: Record<string, number[]> = {
   paris: (process.env.OPENAGENDA_AGENDAS_PARIS ?? "")
     .split(",")
@@ -55,15 +56,26 @@ export const OPENAGENDA_AGENDAS: Record<string, number[]> = {
     .filter((n) => n > 0),
 };
 
+async function discoverAgendas(key: string, cityName: string): Promise<number[]> {
+  const p = new URLSearchParams({ key, search: cityName, size: "20" });
+  const res = await fetch(`${API}/agendas?${p}`);
+  if (!res.ok) return [];
+  const body = (await res.json()) as { agendas?: { uid: number }[] };
+  // Les événements hors de la zone sont écartés ensuite par la distance.
+  return (body.agendas ?? []).slice(0, 10).map((a) => a.uid);
+}
+
 export const openagenda: Connector = {
   id: "openagenda",
   async fetch(city, log) {
     const key = process.env.OPENAGENDA_API_KEY;
-    const agendas = OPENAGENDA_AGENDAS[city.slug] ?? [];
-    if (!key || !agendas.length) {
-      log("OPENAGENDA_API_KEY ou agendas absents : ignoré");
+    if (!key) {
+      log("OPENAGENDA_API_KEY absente : ignoré");
       return null;
     }
+    const agendas = OPENAGENDA_AGENDAS[city.slug]?.length ? OPENAGENDA_AGENDAS[city.slug] : await discoverAgendas(key, city.name);
+    log(`${agendas.length} agendas suivis`);
+    if (!agendas.length) return [];
     const out: NormalizedEvent[] = [];
     let skipped = 0;
 
@@ -91,7 +103,8 @@ export const openagenda: Connector = {
           const categories = categoriesFor(`${title} ${kw} ${tr(e.description) ?? ""}`);
           const link = (e.registration ?? []).find((r) => r.type === "link" && isHttpUrl(r.value))?.value ?? null;
           const official = `https://openagenda.com/agendas/${agenda}/events/${e.slug ?? e.uid}`;
-          if (!title || !occ.length || !categories.length || !Number.isFinite(lat) || e.attendanceMode === 2) {
+          const inArea = Number.isFinite(lat) && Number.isFinite(lng) && haversineKm(lat, lng, city.lat, city.lng) <= city.radiusKm;
+          if (!title || !occ.length || !categories.length || !inArea || e.attendanceMode === 2) {
             skipped++;
             continue;
           }
@@ -106,6 +119,7 @@ export const openagenda: Connector = {
 
           out.push({
             source: "openagenda",
+            kind: "event",
             sourceId: String(e.uid),
             sourceUrl: official,
             raw: e,

@@ -13,7 +13,6 @@ interface Props {
   center: { lat: number; lng: number };
   me: { lat: number; lng: number } | null;
   from: string | null;
-  tz: string;
   isNew: (e: EventItem) => boolean;
   isFav: (id: string) => boolean;
   onOpen: (e: EventItem) => void;
@@ -24,7 +23,7 @@ const STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 if (typeof window !== "undefined") maplibregl.setWorkerUrl(`${window.location.origin}/maplibre/maplibre-gl-worker.mjs`);
 
-export default function MapView({ events, center, me, from, tz, isNew, isFav, onOpen, onFav }: Props) {
+export default function MapView({ events, center, me, from, isNew, isFav, onOpen, onFav }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
@@ -111,7 +110,6 @@ export default function MapView({ events, center, me, from, tz, isNew, isFav, on
           <EventCard
             e={sel}
             from={from}
-            tz={tz}
             isNew={isNew(sel)}
             isFav={isFav(sel.id)}
             onOpen={() => onOpen(sel)}

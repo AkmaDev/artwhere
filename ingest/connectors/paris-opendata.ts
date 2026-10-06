@@ -1,3 +1,4 @@
+import { haversineKm } from "../../lib/area";
 import type { CategoryId } from "../../lib/categories";
 import { zonedDayStart } from "../../lib/dates";
 import { fmtDuration, fmtHourRange, isHttpUrl, looksOngoing, parsePrices, stripHtml, truncate } from "../normalize";
@@ -102,7 +103,8 @@ function hoursFrom(desc: string | null): string | null {
 export const parisOpenData: Connector = {
   id: "paris-opendata",
   async fetch(city, log) {
-    if (city.slug !== "paris") return null;
+    // Jeu de données de la Ville de Paris : seulement pour une zone centrée sur Paris.
+    if (haversineKm(city.lat, city.lng, 48.8566, 2.3522) > 15) return null;
     const params = new URLSearchParams({ select: FIELDS.join(","), where: "date_end >= now(days=-1)", timezone: "UTC" });
     const res = await fetch(`${API}?${params}`, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error(`paris-opendata HTTP ${res.status}`);
@@ -144,6 +146,7 @@ export const parisOpenData: Connector = {
 
       out.push({
         source: "paris-opendata",
+        kind: "event",
         sourceId: String(r.id),
         sourceUrl: r.url,
         raw: r,

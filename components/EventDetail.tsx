@@ -9,7 +9,6 @@ import { EventImage, NewBadge, StatusBadge, usePriceShort } from "./ui";
 
 interface Props {
   e: EventItem;
-  tz: string;
   isNew: boolean;
   isFav: boolean;
   onClose: () => void;
@@ -24,7 +23,7 @@ function fullDate(day: string, locale: string): string {
   return s;
 }
 
-export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Props) {
+export function EventDetail({ e, isNew, isFav, onClose, onFav, flash }: Props) {
   const t = useTranslations("detail");
   const tc = useTranslations("card");
   const tcat = useTranslations("categories");
@@ -33,6 +32,8 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
   const locale = useLocale();
   const ios = useIsIos();
   const priceShort = usePriceShort()(e);
+  const tz = e.timezone;
+  const isPlace = e.kind === "place";
 
   const startDay = localDay(e.startAt, tz);
   const endDay = localDay(e.endAt, tz);
@@ -50,8 +51,8 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
       : e.priceMin === 0
         ? t("freeLong")
         : e.priceMax != null && e.priceMax > e.priceMin
-          ? t("fromLong", { price: money(e.priceMin, locale) })
-          : t("exactLong", { price: money(e.priceMin, locale) });
+          ? t("fromLong", { price: money(e.priceMin, locale, e.currency) })
+          : t("exactLong", { price: money(e.priceMin, locale, e.currency) });
 
   const sourceNames = e.sources.map((s) => (ts.has(s) ? ts(s) : s));
   const blocked = isBlocked(e.status);
@@ -127,7 +128,7 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
           <div className="flex flex-col gap-2.5">
             <div className="flex flex-wrap gap-1.5">
               {isNew && <NewBadge />}
-              <StatusBadge status={e.status} />
+              {!isPlace && <StatusBadge status={e.status} />}
               {e.categories.map((c) => (
                 <span key={c} className="flex h-[26px] items-center rounded-[7px] bg-sand px-[9px] text-[12px] leading-none font-medium">
                   {tcat(`${c}.name`)}
@@ -138,7 +139,9 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
             {e.description && <p className="pretty m-0 text-[15px] leading-normal text-[#3F3F3B]">{e.description}</p>}
           </div>
           <div className="flex flex-col border-t border-line">
-            {row(
+            {isPlace ? (
+              row(t("hours"), <span className="text-[15px] leading-[1.4]">{e.hoursText ?? t("hoursUnknown")}</span>)
+            ) : row(
               t("when"),
               <div className="flex flex-col gap-0.5">
                 <span className="text-[15px] leading-[1.4] font-semibold">{dates}</span>
@@ -156,7 +159,7 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
                 </a>
               </div>,
             )}
-            {row(t("price"), <span className="text-[15px] leading-[1.4] font-semibold">{priceLong}</span>)}
+            {(!isPlace || e.priceMin != null) && row(t("price"), <span className="text-[15px] leading-[1.4] font-semibold">{priceLong}</span>)}
             {row(
               t("source"),
               <span className="text-[14px] leading-[1.45]">
@@ -170,7 +173,7 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
       </div>
       <div className="flex flex-none items-center justify-between gap-4 border-t border-line bg-white px-5 pt-3 pb-[18px]">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[17px] leading-tight font-semibold">{priceShort}</span>
+          <span className="text-[17px] leading-tight font-semibold">{isPlace ? t("placeLabel") : priceShort}</span>
           <span className="text-[12.5px] leading-tight text-muted">{ctaSub}</span>
         </div>
         {href && (
@@ -182,7 +185,7 @@ export function EventDetail({ e, tz, isNew, isFav, onClose, onFav, flash }: Prop
               blocked ? "bg-sand text-ink hover:text-ink" : "bg-accent text-white hover:text-white"
             }`}
           >
-            {isBooking ? t("book") : t("official")}
+            {isPlace ? t("website") : isBooking ? t("book") : t("official")}
           </a>
         )}
       </div>

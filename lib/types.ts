@@ -5,6 +5,10 @@ export type Moment = "m" | "a" | "s";
 
 export interface EventItem {
   id: string;
+  /** « place » = lieu culturel permanent (musée, monument…), sans date. */
+  kind: "event" | "place";
+  timezone: string;
+  currency: string;
   title: string;
   description: string | null;
   imageUrl: string | null;

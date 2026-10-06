@@ -8,7 +8,6 @@ import { EventImage, NewBadge, StatusBadge, usePriceShort } from "./ui";
 export interface CardProps {
   e: EventItem;
   from: string | null;
-  tz: string;
   isNew: boolean;
   isFav: boolean;
   onOpen: () => void;
@@ -16,11 +15,15 @@ export interface CardProps {
   variant?: "big" | "compact";
 }
 
-export function EventCard({ e, from, tz, isNew, isFav, onOpen, onFav, variant = "big" }: CardProps) {
+export function EventCard({ e, from, isNew, isFav, onOpen, onFav, variant = "big" }: CardProps) {
   const t = useTranslations("card");
   const locale = useLocale();
-  const price = usePriceShort()(e);
-  const when = whenShort(e, from, tz, locale, (date) => t("until", { date }));
+  const isPlace = e.kind === "place";
+  const priceShort = usePriceShort();
+  const price = isPlace && e.priceMin == null ? "" : priceShort(e);
+  const when = isPlace
+    ? (e.hoursText && e.hoursText.length <= 40 ? e.hoursText : t("place"))
+    : whenShort(e, from, e.timezone, locale, (date) => t("until", { date }));
   const where = `${e.venueName ?? ""}${e.distanceKm != null ? ` · ${km(e.distanceKm, locale)}` : e.address ? ` · ${shortArea(e.address)}` : ""}`;
   const dim = isBlocked(e.status) ? "opacity-[.62]" : "";
 
@@ -64,7 +67,7 @@ export function EventCard({ e, from, tz, isNew, isFav, onOpen, onFav, variant = 
           <span className="truncate text-[13.5px] leading-[1.3] text-muted">{where}</span>
           <div className="flex items-center gap-2 pt-[3px]">
             <span className="text-[14px] leading-none font-semibold">{price}</span>
-            <StatusBadge status={e.status} size="sm" />
+            {!isPlace && <StatusBadge status={e.status} size="sm" />}
           </div>
         </div>
         {fav}
@@ -78,7 +81,7 @@ export function EventCard({ e, from, tz, isNew, isFav, onOpen, onFav, variant = 
         <EventImage src={e.imageUrl} alt="" className="h-full w-full" />
         <div className="absolute top-2.5 left-2.5 flex gap-1.5">
           {isNew && <NewBadge />}
-          <StatusBadge status={e.status} />
+          {!isPlace && <StatusBadge status={e.status} />}
         </div>
         {fav}
       </div>

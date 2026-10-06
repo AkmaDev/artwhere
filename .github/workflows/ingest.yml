@@ -10,15 +10,18 @@ on:
       task:
         description: "ingest | daily"
         default: ingest
+      area:
+        description: "Zone à collecter (slug), vide = toutes les zones actives"
+        default: ""
 
 concurrency:
-  group: ingest
+  group: ingest-${{ inputs.area || 'all' }}
   cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -28,6 +31,9 @@ jobs:
       TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
       OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
       OPENAGENDA_AGENDAS_PARIS: ${{ vars.OPENAGENDA_AGENDAS_PARIS }}
+      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      AREA: ${{ inputs.area }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,7 +43,8 @@ jobs:
       - run: npm ci
       - name: Collecte + alertes immédiates
         if: github.event.schedule == '15 */3 * * *' || (github.event_name == 'workflow_dispatch' && inputs.task == 'ingest')
-        run: npm run ingest
+        run: |
+          if [ -n "$AREA" ]; then npm run ingest -- --area="$AREA"; else npm run ingest; fi
       - name: Résumé quotidien (9h Paris)
         if: github.event.schedule == '0 7 * * *' || github.event.schedule == '0 8 * * *'
         run: npm run notify:daily

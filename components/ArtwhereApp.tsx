@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { getCity, nearestActiveCity } from "@/lib/cities";
+import type { Area, Place } from "@/lib/area";
 import { fmtDayLong, fmtRange, shortcutRanges, todayIn } from "@/lib/dates";
 import {
   DEFAULT_PREFS,
@@ -32,6 +32,7 @@ const MapView = dynamic(() => import("./MapView"), { ssr: false });
 type Screen = "explore" | "favs" | "alerts";
 const PAGE = 30;
 const ONGOING_PREVIEW = 4;
+const AREA_POLL_MS = 15000;
 type BeforeInstallPrompt = Event & { prompt: () => Promise<void> };
 
 export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "compact" }) {
@@ -44,6 +45,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const [favs, setFavs] = useStored<FavMap>("favs", {});
   const [alerts, setAlerts] = useStored<AlertPrefs>("alerts", { on: false, freq: "now" });
   const [bannerHidden, setBannerHidden] = useStored("bannerHidden", false);
+  const [recent, setRecent] = useStored<Area[]>("recentAreas", []);
+  const [areaBusy, setAreaBusy] = useState(false);
+  const [placesOpen, setPlacesOpen] = useState(false);
 
   const [screen, setScreen] = useState<Screen>("explore");
   const [search, setSearch] = useState(false);
@@ -86,8 +90,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       .catch(() => {});
   }, []);
 
-  const city = getCity(prefs.city) ?? getCity("paris")!;
-  const tz = city.timezone;
+  const area = prefs.area ?? null;
+  const tz = area?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const today = ready ? todayIn(tz) : "";
   const from = prefs.from && prefs.from >= today ? prefs.from : today;
   const to = prefs.to && prefs.to >= from ? prefs.to : from;
@@ -111,6 +115,27 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   }, []);
 
   useEffect(() => {
+    if (ready && prefs.onboarded && !prefs.area) {
+      setSearch(true);
+      setStep("where");
+    }
+  }, [ready, prefs.onboarded, prefs.area]);
+
+  useEffect(() => {
+    if (!area || area.status !== "pending") return;
+    const timer = setInterval(() => {
+      fetch(`/api/areas/${area.slug}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { area: Area } | null) => {
+          setReload((x) => x + 1);
+          if (d?.area.status === "ready") setPrefsRaw((prev) => (prev.area?.slug === d.area.slug ? { ...prev, area: d.area } : prev));
+        })
+        .catch(() => {});
+    }, AREA_POLL_MS);
+    return () => clearInterval(timer);
+  }, [area, setPrefsRaw]);
+
+  useEffect(() => {
     if (!ready || !prefs.onboarded) return;
     if (!prefs.from) {
       const we = shortcutRanges(todayIn(tz)).find((r) => r.id === "weekend")!;
@@ -119,8 +144,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   }, [ready, prefs.onboarded, prefs.from, tz, setPrefs]);
 
   const queryKey = useMemo(() => {
-    if (!ready || !today || !prefs.cats.length) return null;
-    const p = new URLSearchParams({ city: prefs.city, from, to, cats: prefs.cats.join(",") });
+    if (!ready || !today || !prefs.cats.length || !area) return null;
+    const p = new URLSearchParams({ city: area.slug, from, to, cats: prefs.cats.join(",") });
     if (prefs.moments.length) p.set("moments", prefs.moments.join(","));
     if (free) p.set("free", "1");
     if (prefs.geo) {
@@ -129,11 +154,12 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       if (near) p.set("maxKm", "2");
     }
     return p.toString();
-  }, [ready, today, prefs.city, prefs.cats, prefs.moments, prefs.geo, from, to, free, near]);
+  }, [ready, today, area, prefs.cats, prefs.moments, prefs.geo, from, to, free, near]);
 
   useEffect(() => {
     setRenderLimit(PAGE);
     setOngoingOpen(false);
+    setPlacesOpen(false);
   }, [queryKey, tab]);
 
   useEffect(() => {
@@ -177,8 +203,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   }, [screen]);
 
   const criteria: Criteria = useMemo(
-    () => ({ city: prefs.city, from, to, cats: prefs.cats, moments: prefs.moments, frequency: alerts.freq }),
-    [prefs.city, from, to, prefs.cats, prefs.moments, alerts.freq],
+    () => ({ city: area?.slug ?? "", from, to, cats: prefs.cats, moments: prefs.moments, frequency: alerts.freq }),
+    [area, from, to, prefs.cats, prefs.moments, alerts.freq],
   );
   const criteriaKey = JSON.stringify(criteria);
   const lastSent = useRef<string | null>(null);
@@ -219,12 +245,35 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     );
   };
 
+  const chooseArea = (a: Area, geo: { lat: number; lng: number } | null = null) => {
+    setPrefs({ area: a, geo });
+    setRecent((prev) => [a, ...prev.filter((x) => x.slug !== a.slug)].slice(0, 5));
+    setStep("when");
+  };
+
+  const pickPlace = async (p: Place, geo: { lat: number; lng: number } | null = null) => {
+    setAreaBusy(true);
+    try {
+      const r = await fetch("/api/areas/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: p.name, country: p.country, countryCode: p.countryCode, lat: p.lat, lng: p.lng }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      chooseArea(((await r.json()) as { area: Area }).area, geo);
+    } catch {
+      flash(t("search.geoFailed"));
+    } finally {
+      setAreaBusy(false);
+    }
+  };
+
   const onGeo = () =>
-    requestGeo((lat, lng) => {
-      const c = nearestActiveCity(lat, lng);
-      if (!c) return flash(t("search.geoOutside"));
-      setPrefs({ city: c.slug, geo: { lat, lng } });
-      setStep("when");
+    requestGeo(async (lat, lng) => {
+      const r = await fetch(`/api/geo/reverse?lat=${lat}&lng=${lng}`).catch(() => null);
+      const place = r?.ok ? ((await r.json()) as { place: Place }).place : null;
+      if (!place) return flash(t("search.geoFailed"));
+      await pickPlace(place, { lat, lng });
       flash(t("search.geoFound"));
     });
 
@@ -248,8 +297,10 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
 
   const all = events ?? [];
   const shown = tab === "all" ? all : all.filter((e) => e.categories.includes(tab as never));
-  const ongoing = shown.filter((e) => e.allDay);
-  const dated = shown.filter((e) => !e.allDay);
+  const evs = shown.filter((e) => e.kind === "event");
+  const places = shown.filter((e) => e.kind === "place");
+  const ongoing = evs.filter((e) => e.allDay);
+  const dated = evs.filter((e) => !e.allDay);
   const days = [...new Set(dated.map((e) => firstDay(e, from, tz)))].sort();
   let budget = renderLimit;
   const groups = [
@@ -260,6 +311,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       const items = dated.filter((e) => firstDay(e, from, tz) === d);
       return { key: d, label: d === today ? t("explore.today") : fmtDayLong(d, locale), sub: t("explore.eventsN", { n: items.length }), items, total: items.length };
     }),
+    ...(places.length
+      ? [{ key: "places", label: t("explore.placesTitle"), sub: t("explore.placesN", { n: places.length }), items: placesOpen || !evs.length ? places : places.slice(0, ONGOING_PREVIEW), total: places.length }]
+      : []),
   ]
     .map((g) => {
       const items = g.items.slice(0, Math.max(budget, 0));
@@ -268,11 +322,11 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     })
     .filter((g) => g.items.length);
   const hasMore = budget <= 0;
-  const newN = all.filter(isNew).length;
+  const newN = all.filter((e) => e.kind === "event" && isNew(e)).length;
   const n = prefs.cats.length;
   const momTxt = prefs.moments.map((m) => t(`moments.${m}.name`)).join(", ");
   const range = fmtRange(from, to, locale);
-  const pillTitle = `${city.name}${prefs.geo ? ` · ${t("explore.aroundMe")}` : ""}`;
+  const pillTitle = `${area?.name ?? t("search.chooseCity")}${prefs.geo ? ` · ${t("explore.aroundMe")}` : ""}`;
   const pillSub = `${range} · ${momTxt || t("moments.allDay")} · ${t("explore.catCount", { n })}`;
   const sourceNames = [...new Set(all.flatMap((e) => e.sources))].map((s) => (t.has(`sources.${s}`) ? t(`sources.${s}`) : s));
   const showBanner = !standalone && !bannerHidden && (ios || !!installEvt);
@@ -384,7 +438,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                 )}
                 <div className="flex items-center justify-between gap-2.5 pt-4 pb-0.5">
                   <span className="text-[14px] leading-[1.3] font-semibold">
-                    {events == null ? t("explore.loading") : t("explore.results", { n: shown.length })}
+                    {events == null ? t("explore.loading") : t("explore.results", { n: evs.length })}
                   </span>
                   <div className="flex gap-1.5">
                     <Pill on={free} onClick={() => setFree(!free)} className="h-8 px-3 text-[13px] leading-none">
@@ -407,6 +461,15 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                     </Pill>
                   </div>
                 </div>
+                {area?.status === "pending" && (
+                  <div className="mt-3.5 flex flex-col gap-1 rounded-[14px] bg-accent-soft px-3.5 py-3">
+                    <span className="text-[14px] leading-[1.3] font-semibold text-ink">{t("explore.preparingTitle", { city: area.name })}</span>
+                    <span className="text-[12.5px] leading-[1.4] text-muted">{t("explore.preparingMsg")}</span>
+                  </div>
+                )}
+                {events != null && !error && evs.length === 0 && places.length > 0 && (
+                  <span className="block pt-2 text-[13px] leading-[1.4] text-muted">{t("explore.fewEvents")}</span>
+                )}
                 {newN > 0 && <span className="block pt-1 text-[13px] leading-[1.3] font-medium text-accent">{t("explore.newSince", { n: newN })}</span>}
 
                 {error && (
@@ -434,7 +497,6 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                           key={e.id}
                           e={e}
                           from={from}
-                          tz={tz}
                           isNew={isNew(e)}
                           isFav={isFav(e.id)}
                           onOpen={() => openDetail(e)}
@@ -443,6 +505,15 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                         />
                       ))}
                     </div>
+                    {g.key === "places" && evs.length > 0 && g.total > ONGOING_PREVIEW && (
+                      <button
+                        type="button"
+                        onClick={() => setPlacesOpen(!placesOpen)}
+                        className="mt-4 h-11 w-full cursor-pointer rounded-[10px] border border-ink bg-white text-[14px] leading-none font-semibold"
+                      >
+                        {placesOpen ? t("explore.showLess") : t("explore.showAll", { n: g.total })}
+                      </button>
+                    )}
                     {g.key === "ongoing" && g.total > ONGOING_PREVIEW && (
                       <button
                         type="button"
@@ -456,7 +527,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                 ))}
                 {hasMore && <div ref={sentinel} className="h-px" />}
 
-                {events != null && !error && shown.length === 0 && (
+                {events != null && !error && shown.length === 0 && area?.status !== "pending" && (
                   <div className="flex flex-col items-center gap-2.5 px-2 py-12 text-center">
                     <span className="text-[18px] leading-[1.3] font-semibold">{t("explore.emptyTitle")}</span>
                     <span className="max-w-[280px] text-[14px] leading-[1.45] text-muted">{t("explore.emptyMsg")}</span>
@@ -489,10 +560,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             ) : (
               <MapView
                 events={shown}
-                center={{ lat: city.lat, lng: city.lng }}
+                center={{ lat: area?.lat ?? 0, lng: area?.lng ?? 0 }}
                 me={prefs.geo}
                 from={from}
-                tz={tz}
                 isNew={isNew}
                 isFav={isFav}
                 onOpen={openDetail}
@@ -511,7 +581,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         )}
 
         {screen === "favs" && (
-          <Favorites favs={Object.values(favs)} tz={tz} onOpen={openDetail} onRemove={toggleFav} />
+          <Favorites favs={Object.values(favs)} onOpen={openDetail} onRemove={toggleFav} />
         )}
 
         {screen === "alerts" && (
@@ -520,7 +590,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             busy={alertBusy}
             title={pillTitle}
             sub={pillSub}
-            notifText={t("alerts.notif", { n: Math.max(newN, 2), city: city.name, range })}
+            notifText={t("alerts.notif", { n: Math.max(newN, 2), city: area?.name ?? "", range })}
             showIosHint={ios && !standalone}
             onToggle={toggleAlerts}
             onFreq={(freq) => setAlerts({ ...alerts, freq })}
@@ -531,7 +601,6 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         {detail && (
           <EventDetail
             e={detail}
-            tz={tz}
             isNew={isNew(detail)}
             isFav={isFav(detail.id)}
             onClose={() => setDetail(null)}
@@ -548,13 +617,17 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             setStep={setStep}
             today={today}
             count={events ? events.length : null}
-            onClose={() => setSearch(false)}
+            onClose={() => area && setSearch(false)}
             onRun={() => {
               setSearch(false);
               setView("list");
               setTab("all");
             }}
             onGeo={onGeo}
+            onPickPlace={(p) => pickPlace(p)}
+            recent={recent}
+            onPickArea={(a) => chooseArea(a)}
+            busy={areaBusy}
             flash={flash}
           />
         )}

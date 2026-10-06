@@ -1,8 +1,6 @@
 import webpush from "web-push";
 import { db } from "./env";
-import { getCity } from "../lib/cities";
-import { fmtRange } from "../lib/dates";
-import { todayIn } from "../lib/dates";
+import { fmtRange, todayIn } from "../lib/dates";
 
 type Frequency = "now" | "daily";
 
@@ -23,11 +21,14 @@ export async function notify(frequency: Frequency): Promise<void> {
 
   const { data: subs, error } = await sb.from("push_subscriptions").select("*").eq("frequency", frequency);
   if (error) throw error;
+  const { data: cities, error: cErr } = await sb.from("cities").select("slug, name, timezone");
+  if (cErr) throw cErr;
+  const bySlug = new Map((cities as { slug: string; name: string; timezone: string }[]).map((c) => [c.slug, c]));
 
   let sent = 0;
   let removed = 0;
   for (const s of subs) {
-    const city = getCity(s.city);
+    const city = bySlug.get(s.city);
     if (!city) continue;
     if (s.date_to < todayIn(city.timezone)) {
       await sb.from("push_subscriptions").delete().eq("endpoint", s.endpoint);

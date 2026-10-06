@@ -22,7 +22,6 @@ export function SharedEvent({ e }: { e: EventItem }) {
     <div className="relative flex-1">
       <EventDetail
         e={e}
-        tz="Europe/Paris"
         isNew={false}
         isFav={!!favs[e.id]}
         onClose={() => router.push("/")}

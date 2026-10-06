@@ -13,10 +13,10 @@ export function isBlocked(s: EventStatus): boolean {
   return s === "full" || s === "closed" || s === "cancelled";
 }
 
-export function money(n: number, locale: string): string {
+export function money(n: number, locale: string, currency: string): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: "EUR",
+    currency,
     maximumFractionDigits: Number.isInteger(n) ? 0 : 2,
   }).format(n);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import type { Area } from "./area";
 import type { CategoryId } from "./categories";
 import type { EventItem, Moment } from "./types";
 
@@ -77,7 +78,7 @@ export function previousVisitAt(): string {
 export interface Prefs {
   onboarded: boolean;
   cats: CategoryId[];
-  city: string;
+  area: Area | null;
   geo: { lat: number; lng: number } | null;
   from: string | null;
   to: string | null;
@@ -87,7 +88,7 @@ export interface Prefs {
 export const DEFAULT_PREFS: Prefs = {
   onboarded: false,
   cats: [],
-  city: "paris",
+  area: null,
   geo: null,
   from: null,
   to: null,

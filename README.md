@@ -14,7 +14,7 @@ Ville pilote : **Paris**.
 ## Démarrer en local
 ```bash
 npm install
-cp .env.example .env.local   # sans Supabase, l'app tourne sur 12 événements de démo
+cp .env.example .env.local   # remplir les clés Supabase (obligatoires)
 npm run dev
 ```
 
@@ -40,7 +40,8 @@ npm run notify:daily -- --force                # résumé quotidien à la main
 Agendas OpenAgenda suivis à Paris : Philharmonie (504556), FICEP (61665301), Centre tchèque (6899331), Institut Liszt (23559850), Centre culturel de Taïwan (12120678), Journées de l'architecture IDF (1388317). La recherche sur tous les agendas d'une zone demande le droit `events:transverse`, à obtenir auprès d'OpenAgenda.
 
 - **Nouvelle source** : un fichier dans `ingest/connectors/` qui exporte un `Connector`, ajouté à `CONNECTORS`.
-- **Nouvelle ville** : une ligne dans `INGEST_CITIES` (`ingest/connectors/index.ts`), dans `lib/cities.ts` et dans la table `cities` (`active = true`).
+- **Nouvelle ville** : rien à faire. Quand un utilisateur cherche une ville inconnue, `/api/areas/resolve` crée la zone (fuseau, devise) et déclenche la collecte via GitHub Actions (`GITHUB_DISPATCH_TOKEN` + `GITHUB_REPO` côté Vercel). Sans token, la zone est collectée au passage suivant du cron (toutes les 3 h).
+- **Lieux culturels** (`ingest/connectors/osm-places.ts`) : OpenStreetMap (rayon de la zone + sites notables à 80 km) enrichi par Wikidata, rafraîchis tous les 7 jours. Les serveurs Overpass publics sont parfois saturés : une collecte partielle ne retire rien et est retentée.
 - **Dédoublonnage** : titre proche (trigrammes > 0,6) + même lieu (nom ou < 200 m) + dates qui se chevauchent → fusion, sources cumulées.
 - **Fraîcheur** : la recherche exclut ce qui est terminé ; un événement qui disparaît de sa source est masqué ; les statuts complet / clôturé l'emportent.
 

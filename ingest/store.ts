@@ -10,6 +10,7 @@ const ranges = (occ: [string, string][]) => (occ.length ? occ.map(([a, b]) => `[
 
 function ownFields(n: NormalizedEvent) {
   return {
+    kind: n.kind,
     title: n.title,
     title_norm: normTitle(n.title),
     description: n.description,
@@ -56,7 +57,7 @@ export class Store {
     let eventId = this.bySourceId.get(n.sourceId);
     let result: UpsertResult = "updated";
 
-    if (!eventId) {
+    if (!eventId && n.kind === "event") {
       const { data: dup, error } = await this.sb.rpc("find_duplicate", {
         p_city: n.city,
         p_title_norm: normTitle(n.title),
@@ -159,12 +160,24 @@ export class Store {
     if (error) throw error;
   }
 
-  /** Événements disparus de la source depuis runStart et vus par aucune autre source : masqués. */
-  async retireMissing(source: string, runStart: string): Promise<number> {
+  /** Nombre d'entrées déjà connues pour cette source dans cette zone. */
+  async knownCount(source: string, city: string): Promise<number> {
+    const { count, error } = await this.sb
+      .from("event_sources")
+      .select("id, events!inner(city)", { count: "exact", head: true })
+      .eq("source", source)
+      .eq("events.city", city);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  /** Événements de la zone disparus de la source depuis runStart et vus par aucune autre source : masqués. */
+  async retireMissing(source: string, city: string, runStart: string): Promise<number> {
     const { data, error } = await this.sb
       .from("event_sources")
-      .select("event_id")
+      .select("event_id, events!inner(city)")
       .eq("source", source)
+      .eq("events.city", city)
       .lt("fetched_at", runStart);
     if (error) throw error;
     let n = 0;

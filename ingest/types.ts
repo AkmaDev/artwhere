@@ -6,6 +6,7 @@ export interface NormalizedEvent {
   sourceId: string;
   sourceUrl: string | null;
   raw: unknown;
+  kind: "event" | "place";
   title: string;
   description: string | null;
   imageUrl: string | null;
@@ -36,6 +37,7 @@ export interface CityConfig {
   name: string;
   country: string;
   timezone: string;
+  currency: string;
   lat: number;
   lng: number;
   radiusKm: number;

@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isCategoryId } from "@/lib/categories";
-import { getCity } from "@/lib/cities";
-import { hasSupabase, supabaseAdmin } from "@/lib/supabase";
+import { getArea } from "@/lib/areas-server";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 
 export async function POST(req: NextRequest) {
-  if (!hasSupabase()) return NextResponse.json({ error: "not-configured" }, { status: 503 });
   const b = await req.json().catch(() => null);
   const sub = b?.subscription;
   const valid =
@@ -18,7 +17,8 @@ export async function POST(req: NextRequest) {
     sub.endpoint.startsWith("https://") &&
     typeof sub.keys?.p256dh === "string" &&
     typeof sub.keys?.auth === "string" &&
-    getCity(b.city)?.active &&
+    typeof b.city === "string" &&
+    !!(await getArea(b.city)) &&
     DAY.test(b.from) &&
     DAY.test(b.to) &&
     Array.isArray(b.cats) &&
