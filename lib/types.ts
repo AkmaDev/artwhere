@@ -1,0 +1,44 @@
+import type { CategoryId } from "./categories";
+
+export type EventStatus = "available" | "almost_full" | "full" | "closed" | "cancelled";
+export type Moment = "m" | "a" | "s";
+
+export interface EventItem {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  categories: CategoryId[];
+  startAt: string;
+  endAt: string;
+  /** Prochaine séance dans le créneau recherché (ou à venir). */
+  nextAt: string;
+  allDay: boolean;
+  hoursText: string | null;
+  durationText: string | null;
+  venueName: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  status: EventStatus;
+  ticketUrl: string | null;
+  officialUrl: string | null;
+  firstDetectedAt: string;
+  lastCheckedAt: string;
+  sources: string[];
+  distanceKm: number | null;
+}
+
+export interface SearchQuery {
+  city: string;
+  from: string;
+  to: string;
+  cats: CategoryId[];
+  moments: Moment[];
+  free: boolean;
+  lat: number | null;
+  lng: number | null;
+  maxKm: number | null;
+}

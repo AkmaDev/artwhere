@@ -1,0 +1,593 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { getCity, nearestActiveCity } from "@/lib/cities";
+import { fmtDayLong, fmtRange, shortcutRanges, todayIn } from "@/lib/dates";
+import {
+  DEFAULT_PREFS,
+  previousVisitAt,
+  useIsIos,
+  useIsStandalone,
+  useStored,
+  type AlertPrefs,
+  type Favorites as FavMap,
+  type Prefs,
+} from "@/lib/device";
+import { firstDay } from "@/lib/format";
+import { disablePush, enablePush, updatePush, type Criteria } from "@/lib/push-client";
+import type { EventItem } from "@/lib/types";
+import { Alerts } from "./Alerts";
+import { EventCard } from "./EventCard";
+import { EventDetail } from "./EventDetail";
+import { Favorites } from "./Favorites";
+import { InstallSheet } from "./InstallSheet";
+import { Onboarding } from "./Onboarding";
+import { SearchSheet, type Step } from "./SearchSheet";
+import { Pill, Toast } from "./ui";
+
+const MapView = dynamic(() => import("./MapView"), { ssr: false });
+
+type Screen = "explore" | "favs" | "alerts";
+const PAGE = 30;
+const ONGOING_PREVIEW = 4;
+type BeforeInstallPrompt = Event & { prompt: () => Promise<void> };
+
+export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "compact" }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const ios = useIsIos();
+  const standalone = useIsStandalone();
+
+  const [prefs, setPrefsRaw, ready] = useStored<Prefs>("prefs", DEFAULT_PREFS);
+  const [favs, setFavs] = useStored<FavMap>("favs", {});
+  const [alerts, setAlerts] = useStored<AlertPrefs>("alerts", { on: false, freq: "now" });
+  const [bannerHidden, setBannerHidden] = useStored("bannerHidden", false);
+
+  const [screen, setScreen] = useState<Screen>("explore");
+  const [search, setSearch] = useState(false);
+  const [step, setStep] = useState<Step>("when");
+  const [view, setView] = useState<"list" | "map">("list");
+  const [tab, setTab] = useState<string>("all");
+  const [free, setFree] = useState(false);
+  const [near, setNear] = useState(false);
+  const [detail, setDetail] = useState<EventItem | null>(null);
+  const [sheet, setSheet] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [events, setEvents] = useState<EventItem[] | null>(null);
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [prevVisit, setPrevVisit] = useState<string | null>(null);
+  const [installEvt, setInstallEvt] = useState<BeforeInstallPrompt | null>(null);
+  const [alertBusy, setAlertBusy] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [renderLimit, setRenderLimit] = useState(PAGE);
+  const [ongoingOpen, setOngoingOpen] = useState(false);
+  const io = useRef<IntersectionObserver | null>(null);
+  const sentinel = useCallback((el: HTMLDivElement | null) => {
+    io.current?.disconnect();
+    if (!el) return;
+    io.current = new IntersectionObserver((entries) => entries[0]?.isIntersecting && setRenderLimit((l) => l + PAGE), {
+      rootMargin: "800px",
+    });
+    io.current.observe(el);
+  }, []);
+
+  const openDetail = useCallback((e: EventItem) => {
+    setDetail(e);
+    if (e.description != null) return;
+    fetch(`/api/events/by-ids?ids=${encodeURIComponent(e.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { events: EventItem[] } | null) => {
+        const full = d?.events[0];
+        if (full) setDetail((cur) => (cur?.id === full.id ? { ...full, nextAt: cur.nextAt, distanceKm: cur.distanceKm } : cur));
+      })
+      .catch(() => {});
+  }, []);
+
+  const city = getCity(prefs.city) ?? getCity("paris")!;
+  const tz = city.timezone;
+  const today = ready ? todayIn(tz) : "";
+  const from = prefs.from && prefs.from >= today ? prefs.from : today;
+  const to = prefs.to && prefs.to >= from ? prefs.to : from;
+
+  const flash = useCallback((s: string) => {
+    setToast(s);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 1800);
+  }, []);
+
+  const setPrefs = useCallback((p: Partial<Prefs>) => setPrefsRaw((prev) => ({ ...prev, ...p })), [setPrefsRaw]);
+
+  useEffect(() => {
+    setPrevVisit(previousVisitAt());
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as BeforeInstallPrompt);
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !prefs.onboarded) return;
+    if (!prefs.from) {
+      const we = shortcutRanges(todayIn(tz)).find((r) => r.id === "weekend")!;
+      setPrefs({ from: we.from, to: we.to });
+    }
+  }, [ready, prefs.onboarded, prefs.from, tz, setPrefs]);
+
+  const queryKey = useMemo(() => {
+    if (!ready || !today || !prefs.cats.length) return null;
+    const p = new URLSearchParams({ city: prefs.city, from, to, cats: prefs.cats.join(",") });
+    if (prefs.moments.length) p.set("moments", prefs.moments.join(","));
+    if (free) p.set("free", "1");
+    if (prefs.geo) {
+      p.set("lat", String(prefs.geo.lat));
+      p.set("lng", String(prefs.geo.lng));
+      if (near) p.set("maxKm", "2");
+    }
+    return p.toString();
+  }, [ready, today, prefs.city, prefs.cats, prefs.moments, prefs.geo, from, to, free, near]);
+
+  useEffect(() => {
+    setRenderLimit(PAGE);
+    setOngoingOpen(false);
+  }, [queryKey, tab]);
+
+  useEffect(() => {
+    if (!queryKey) {
+      setEvents([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    setError(false);
+    const timer = setTimeout(() => {
+      fetch(`/api/events?${queryKey}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then((d: { events: EventItem[] }) => setEvents(d.events))
+        .catch((e) => {
+          if (ctrl.signal.aborted) return;
+          console.error(e);
+          setError(true);
+        });
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [queryKey, reload]);
+
+  const favIds = useMemo(() => Object.keys(favs), [favs]);
+  useEffect(() => {
+    if (screen !== "favs" || !favIds.length) return;
+    fetch(`/api/events/by-ids?ids=${favIds.join(",")}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { events: EventItem[] } | null) => {
+        if (!d) return;
+        setFavs((prev) => {
+          const next = { ...prev };
+          for (const e of d.events) if (next[e.id]) next[e.id] = e;
+          return next;
+        });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
+
+  const criteria: Criteria = useMemo(
+    () => ({ city: prefs.city, from, to, cats: prefs.cats, moments: prefs.moments, frequency: alerts.freq }),
+    [prefs.city, from, to, prefs.cats, prefs.moments, alerts.freq],
+  );
+  const criteriaKey = JSON.stringify(criteria);
+  const lastSent = useRef<string | null>(null);
+  useEffect(() => {
+    if (!alerts.on || !today) return;
+    if (lastSent.current === null) {
+      lastSent.current = criteriaKey;
+      return;
+    }
+    if (lastSent.current === criteriaKey) return;
+    lastSent.current = criteriaKey;
+    const timer = setTimeout(() => updatePush(criteria).catch(() => {}), 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alerts.on, criteriaKey, today]);
+
+  if (!ready) return null;
+
+  const isNew = (e: EventItem) => !!prevVisit && e.firstDetectedAt > prevVisit;
+  const isFav = (id: string) => !!favs[id];
+  const toggleFav = (e: EventItem) => {
+    const had = !!favs[e.id];
+    setFavs((prev) => {
+      const next = { ...prev };
+      if (had) delete next[e.id];
+      else next[e.id] = e;
+      return next;
+    });
+    if (!had) flash(t("toast.favAdded"));
+  };
+
+  const requestGeo = (then: (lat: number, lng: number) => void) => {
+    if (!("geolocation" in navigator)) return flash(t("search.geoDenied"));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => then(pos.coords.latitude, pos.coords.longitude),
+      () => flash(t("search.geoDenied")),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  };
+
+  const onGeo = () =>
+    requestGeo((lat, lng) => {
+      const c = nearestActiveCity(lat, lng);
+      if (!c) return flash(t("search.geoOutside"));
+      setPrefs({ city: c.slug, geo: { lat, lng } });
+      setStep("when");
+      flash(t("search.geoFound"));
+    });
+
+  if (!prefs.onboarded) {
+    return (
+      <>
+        <Onboarding
+          cats={prefs.cats}
+          onChange={(cats) => setPrefs({ cats })}
+          onDone={() => {
+            setPrefs({ onboarded: true });
+            setSearch(true);
+            setStep("where");
+          }}
+          flash={flash}
+        />
+        <Toast text={toast} />
+      </>
+    );
+  }
+
+  const all = events ?? [];
+  const shown = tab === "all" ? all : all.filter((e) => e.categories.includes(tab as never));
+  const ongoing = shown.filter((e) => e.allDay);
+  const dated = shown.filter((e) => !e.allDay);
+  const days = [...new Set(dated.map((e) => firstDay(e, from, tz)))].sort();
+  let budget = renderLimit;
+  const groups = [
+    ...(ongoing.length
+      ? [{ key: "ongoing", label: t("explore.ongoing"), sub: t("explore.places", { n: ongoing.length }), items: ongoingOpen ? ongoing : ongoing.slice(0, ONGOING_PREVIEW), total: ongoing.length }]
+      : []),
+    ...days.map((d) => {
+      const items = dated.filter((e) => firstDay(e, from, tz) === d);
+      return { key: d, label: d === today ? t("explore.today") : fmtDayLong(d, locale), sub: t("explore.eventsN", { n: items.length }), items, total: items.length };
+    }),
+  ]
+    .map((g) => {
+      const items = g.items.slice(0, Math.max(budget, 0));
+      budget -= items.length;
+      return { ...g, items };
+    })
+    .filter((g) => g.items.length);
+  const hasMore = budget <= 0;
+  const newN = all.filter(isNew).length;
+  const n = prefs.cats.length;
+  const momTxt = prefs.moments.map((m) => t(`moments.${m}.name`)).join(", ");
+  const range = fmtRange(from, to, locale);
+  const pillTitle = `${city.name}${prefs.geo ? ` · ${t("explore.aroundMe")}` : ""}`;
+  const pillSub = `${range} · ${momTxt || t("moments.allDay")} · ${t("explore.catCount", { n })}`;
+  const sourceNames = [...new Set(all.flatMap((e) => e.sources))].map((s) => (t.has(`sources.${s}`) ? t(`sources.${s}`) : s));
+  const showBanner = !standalone && !bannerHidden && (ios || !!installEvt);
+
+  const toggleAlerts = async () => {
+    setAlertBusy(true);
+    try {
+      if (alerts.on) {
+        await disablePush();
+        setAlerts({ ...alerts, on: false });
+        flash(t("alerts.off"));
+        return;
+      }
+      const r = await enablePush(criteria);
+      if (r === "ok") {
+        lastSent.current = criteriaKey;
+        setAlerts({ ...alerts, on: true });
+        flash(t("alerts.on"));
+      } else if (r === "unsupported" && ios && !standalone) setSheet(true);
+      else
+        flash(
+          t(
+            r === "denied"
+              ? "alerts.denied"
+              : r === "unsupported"
+                ? "alerts.unsupported"
+                : r === "not-configured"
+                  ? "alerts.notConfigured"
+                  : "alerts.failed",
+          ),
+        );
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+
+  const tabs: [Screen, string][] = [
+    ["explore", t("tabs.explore")],
+    ["favs", t("tabs.favs")],
+    ["alerts", t("tabs.alerts")],
+  ];
+
+  return (
+    <>
+      <div className="relative min-h-0 flex-1">
+        {screen === "explore" && (
+          <div className="flex h-full flex-col">
+            <div className="flex flex-none flex-col gap-3 border-b border-line bg-white px-4 pt-3.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch(true);
+                  setStep("when");
+                }}
+                className="flex w-full cursor-pointer items-center gap-3.5 rounded-full border border-border bg-white py-2.5 pr-2.5 pl-5 text-left text-ink shadow-[0_3px_14px_rgba(0,0,0,.08)]"
+              >
+                <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                  <span className="text-[15px] leading-tight font-semibold">{pillTitle}</span>
+                  <span className="truncate text-[13px] leading-tight text-muted">{pillSub}</span>
+                </span>
+                <span className="flex h-10 flex-none items-center rounded-full bg-sand px-3.5 text-[13px] leading-none font-semibold">
+                  {t("explore.edit")}
+                </span>
+              </button>
+              <div className="no-scrollbar -mx-4 flex gap-[22px] overflow-x-auto px-4">
+                {[{ id: "all", name: t("explore.all") }, ...prefs.cats.map((c) => ({ id: c, name: t(`categories.${c}.name`) }))].map((x) => {
+                  const on = tab === x.id;
+                  return (
+                    <button
+                      key={x.id}
+                      type="button"
+                      onClick={() => setTab(x.id)}
+                      aria-pressed={on}
+                      className={`flex-none cursor-pointer border-0 border-b-2 bg-transparent px-0 pt-2 pb-3 text-[14px] leading-none font-semibold ${
+                        on ? "border-ink text-ink" : "border-transparent text-[#77756F]"
+                      }`}
+                    >
+                      {x.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {view === "list" ? (
+              <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-20">
+                {showBanner && (
+                  <div className="mt-3.5 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1 rounded-[14px] bg-sand py-3 pr-1.5 pl-3.5">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[14px] leading-[1.3] font-semibold">{t("explore.installTitle")}</span>
+                      <span className="text-[12.5px] leading-[1.35] text-muted">{t("explore.installSub")}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => (installEvt ? installEvt.prompt().then(() => setInstallEvt(null)) : setSheet(true))}
+                      className="h-10 cursor-pointer rounded-[10px] border-0 bg-ink px-3.5 text-[13px] leading-none font-semibold text-white"
+                    >
+                      {installEvt ? t("explore.installInstall") : t("explore.installHow")}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t("explore.dismiss")}
+                      onClick={() => setBannerHidden(true)}
+                      className="h-11 w-9 cursor-pointer border-0 bg-transparent text-[20px] leading-none text-muted"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-2.5 pt-4 pb-0.5">
+                  <span className="text-[14px] leading-[1.3] font-semibold">
+                    {events == null ? t("explore.loading") : t("explore.results", { n: shown.length })}
+                  </span>
+                  <div className="flex gap-1.5">
+                    <Pill on={free} onClick={() => setFree(!free)} className="h-8 px-3 text-[13px] leading-none">
+                      {t("explore.free")}
+                    </Pill>
+                    <Pill
+                      on={near}
+                      onClick={() => {
+                        if (near) return setNear(false);
+                        if (prefs.geo) return setNear(true);
+                        requestGeo((lat, lng) => {
+                          setPrefs({ geo: { lat, lng } });
+                          setNear(true);
+                          flash(t("search.geoFound"));
+                        });
+                      }}
+                      className="h-8 px-3 text-[13px] leading-none"
+                    >
+                      {t("explore.near")}
+                    </Pill>
+                  </div>
+                </div>
+                {newN > 0 && <span className="block pt-1 text-[13px] leading-[1.3] font-medium text-accent">{t("explore.newSince", { n: newN })}</span>}
+
+                {error && (
+                  <div className="flex flex-col items-center gap-2.5 px-2 py-12 text-center">
+                    <span className="max-w-[280px] text-[14px] leading-[1.45] text-muted">{t("explore.error")}</span>
+                    <button
+                      type="button"
+                      onClick={() => setReload((x) => x + 1)}
+                      className="h-11 cursor-pointer rounded-[10px] border border-ink bg-white px-[18px] text-[14px] leading-none font-semibold"
+                    >
+                      {t("explore.retry")}
+                    </button>
+                  </div>
+                )}
+
+                {groups.map((g) => (
+                  <section key={g.key}>
+                    <div className="flex items-baseline justify-between pt-[22px] pb-3">
+                      <h2 className="m-0 text-[18px] leading-[1.2] font-semibold tracking-[-.01em]">{g.label}</h2>
+                      <span className="text-[13px] leading-none text-muted">{g.sub}</span>
+                    </div>
+                    <div className={`flex flex-col ${cardVariant === "big" ? "gap-[26px]" : "gap-[18px]"}`}>
+                      {g.items.map((e) => (
+                        <EventCard
+                          key={e.id}
+                          e={e}
+                          from={from}
+                          tz={tz}
+                          isNew={isNew(e)}
+                          isFav={isFav(e.id)}
+                          onOpen={() => openDetail(e)}
+                          onFav={() => toggleFav(e)}
+                          variant={cardVariant}
+                        />
+                      ))}
+                    </div>
+                    {g.key === "ongoing" && g.total > ONGOING_PREVIEW && (
+                      <button
+                        type="button"
+                        onClick={() => setOngoingOpen(!ongoingOpen)}
+                        className="mt-4 h-11 w-full cursor-pointer rounded-[10px] border border-ink bg-white text-[14px] leading-none font-semibold"
+                      >
+                        {ongoingOpen ? t("explore.showLess") : t("explore.showAll", { n: g.total })}
+                      </button>
+                    )}
+                  </section>
+                ))}
+                {hasMore && <div ref={sentinel} className="h-px" />}
+
+                {events != null && !error && shown.length === 0 && (
+                  <div className="flex flex-col items-center gap-2.5 px-2 py-12 text-center">
+                    <span className="text-[18px] leading-[1.3] font-semibold">{t("explore.emptyTitle")}</span>
+                    <span className="max-w-[280px] text-[14px] leading-[1.45] text-muted">{t("explore.emptyMsg")}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const wk = shortcutRanges(today).find((r) => r.id === "week")!;
+                        setPrefs({ from: wk.from, to: wk.to, moments: [] });
+                        setFree(false);
+                        setNear(false);
+                        setTab("all");
+                      }}
+                      className="mt-1.5 h-11 cursor-pointer rounded-[10px] border border-ink bg-white px-[18px] text-[14px] leading-none font-semibold"
+                    >
+                      {t("explore.widen")}
+                    </button>
+                  </div>
+                )}
+
+                <p className="m-0 mt-7 text-center text-[12px] leading-normal text-subtle">
+                  {t("explore.footer1")}
+                  {sourceNames.length > 0 && (
+                    <>
+                      <br />
+                      {t("explore.footer2", { sources: sourceNames.join(", ") })}
+                    </>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <MapView
+                events={shown}
+                center={{ lat: city.lat, lng: city.lng }}
+                me={prefs.geo}
+                from={from}
+                tz={tz}
+                isNew={isNew}
+                isFav={isFav}
+                onOpen={openDetail}
+                onFav={toggleFav}
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={() => setView(view === "list" ? "map" : "list")}
+              className="absolute bottom-4 left-1/2 z-[7] h-11 -translate-x-1/2 cursor-pointer rounded-full border-0 bg-ink px-5 text-[14px] leading-none font-semibold text-white shadow-[0_6px_18px_rgba(0,0,0,.25)]"
+            >
+              {view === "list" ? t("explore.map") : t("explore.list")}
+            </button>
+          </div>
+        )}
+
+        {screen === "favs" && (
+          <Favorites favs={Object.values(favs)} tz={tz} onOpen={openDetail} onRemove={toggleFav} />
+        )}
+
+        {screen === "alerts" && (
+          <Alerts
+            alerts={alerts}
+            busy={alertBusy}
+            title={pillTitle}
+            sub={pillSub}
+            notifText={t("alerts.notif", { n: Math.max(newN, 2), city: city.name, range })}
+            showIosHint={ios && !standalone}
+            onToggle={toggleAlerts}
+            onFreq={(freq) => setAlerts({ ...alerts, freq })}
+            onHowTo={() => setSheet(true)}
+          />
+        )}
+
+        {detail && (
+          <EventDetail
+            e={detail}
+            tz={tz}
+            isNew={isNew(detail)}
+            isFav={isFav(detail.id)}
+            onClose={() => setDetail(null)}
+            onFav={() => toggleFav(detail)}
+            flash={flash}
+          />
+        )}
+
+        {search && (
+          <SearchSheet
+            prefs={{ ...prefs, from, to }}
+            setPrefs={setPrefs}
+            step={step}
+            setStep={setStep}
+            today={today}
+            count={events ? events.length : null}
+            onClose={() => setSearch(false)}
+            onRun={() => {
+              setSearch(false);
+              setView("list");
+              setTab("all");
+            }}
+            onGeo={onGeo}
+            flash={flash}
+          />
+        )}
+
+        {sheet && <InstallSheet ios={ios} onClose={() => setSheet(false)} />}
+        <Toast text={toast} />
+      </div>
+
+      {!detail && !search && (
+        <nav className="grid flex-none grid-cols-3 border-t border-line bg-white px-2 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
+          {tabs.map(([id, name]) => {
+            const on = screen === id;
+            const badge = id === "favs" && favIds.length ? String(favIds.length) : "";
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setScreen(id)}
+                aria-current={on ? "page" : undefined}
+                className={`relative flex h-[50px] cursor-pointer flex-col items-center justify-center gap-[5px] border-0 bg-transparent ${on ? "text-ink" : "text-subtle"}`}
+              >
+                <span className={`h-[5px] w-[5px] rounded-full ${on ? "bg-accent" : "bg-transparent"}`} />
+                <span className="text-[13px] leading-none font-semibold">{name}</span>
+                {badge && (
+                  <span className="absolute top-1.5 left-[calc(50%+18px)] h-[18px] min-w-[18px] rounded-[9px] bg-accent px-[5px] text-[11px] leading-[18px] font-semibold text-white">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#E9E7E2;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input{font-family:inherit}
+a{color:#1E1E1C}
+a:hover{color:#2E3BD6}
+::-webkit-scrollbar{width:0;height:0}
+</style>
+</helmet>
+<div style="min-height:100dvh; display:flex; justify-content:center; align-items:center; background:#E9E7E2; font-family:'Instrument Sans',sans-serif; color:#1E1E1C">
+<div style="position:relative; width:100%; max-width:402px; height:100dvh; max-height:874px; background:#FFFFFF; overflow:hidden; border-radius:clamp(0px, calc((100vw - 460px) * 100), 28px); box-shadow:0 30px 80px rgba(0,0,0,.16); display:flex; flex-direction:column">
+
+<div style="flex:1; min-height:0; position:relative">
+
+<sc-if value="{{ isOnboard }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="01 Onboarding" style="height:100%; display:flex; flex-direction:column">
+  <div style="flex:1; overflow-y:auto; padding:24px 20px 20px; display:flex; flex-direction:column; gap:20px">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+      <span style="font:700 20px/1 'Instrument Sans'; letter-spacing:-.02em">affiche</span>
+      <div style="display:flex; gap:4px; padding:3px; border-radius:999px; background:#F3F2EE">
+        <span style="height:30px; padding:0 12px; display:flex; align-items:center; border-radius:999px; background:#FFFFFF; font:600 13px/1 'Instrument Sans'; box-shadow:0 1px 2px rgba(0,0,0,.1)">Français</span>
+        <span style="height:30px; padding:0 12px; display:flex; align-items:center; font:500 13px/1 'Instrument Sans'; color:#9A9892">English (bientôt)</span>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px">
+      <h1 style="margin:0; font:600 28px/1.15 'Instrument Sans'; letter-spacing:-.02em; text-wrap:balance">Qu'est-ce qui t'intéresse&nbsp;?</h1>
+      <p style="margin:0; font:400 15px/1.45 'Instrument Sans'; color:#6A6A66; text-wrap:pretty">Choisis jusqu'à 4 catégories. On ne te montrera que ça. Tu pourras changer plus tard.</p>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px">
+      <sc-for list="{{ catTiles }}" as="c" hint-placeholder-count="10">
+        <button onClick="{{ c.toggle }}" style="min-height:76px; padding:14px; border:1.5px solid {{ c.bd }}; border-radius:14px; background:{{ c.bg }}; color:#1E1E1C; text-align:left; display:flex; flex-direction:column; justify-content:space-between; gap:6px; cursor:pointer; opacity:{{ c.op }}">
+          <span style="font:600 15px/1.2 'Instrument Sans'">{{ c.name }}</span>
+          <span style="font:400 12.5px/1.3 'Instrument Sans'; color:#6A6A66">{{ c.hint }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:none; padding:14px 20px 20px; border-top:1px solid #ECEAE5; display:flex; justify-content:space-between; align-items:center; gap:16px">
+    <span style="font:500 14px/1.3 'Instrument Sans'; color:#6A6A66">{{ catCountLabel }}</span>
+    <button onClick="{{ finishOnboard }}" style="height:50px; padding:0 26px; border:0; border-radius:12px; background:{{ ctaBg }}; color:#FFFFFF; font:600 16px/1 'Instrument Sans'; cursor:pointer">Continuer</button>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isExplore }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="02 Explorer" style="height:100%; display:flex; flex-direction:column">
+  <div style="flex:none; padding:14px 16px 0; background:#FFFFFF; display:flex; flex-direction:column; gap:12px; border-bottom:1px solid #ECEAE5">
+    <button onClick="{{ openSearch }}" style="width:100%; display:flex; align-items:center; gap:14px; padding:10px 10px 10px 20px; border:1px solid #E3E1DC; border-radius:999px; background:#FFFFFF; box-shadow:0 3px 14px rgba(0,0,0,.08); cursor:pointer; text-align:left; color:#1E1E1C">
+      <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+        <span style="font:600 15px/1.2 'Instrument Sans'">{{ pillTitle }}</span>
+        <span style="font:400 13px/1.2 'Instrument Sans'; color:#6A6A66; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ pillSub }}</span>
+      </span>
+      <span style="flex:none; height:40px; padding:0 14px; display:flex; align-items:center; border-radius:999px; background:#F3F2EE; font:600 13px/1 'Instrument Sans'">Modifier</span>
+    </button>
+    <div style="display:flex; gap:22px; overflow-x:auto; margin:0 -16px; padding:0 16px">
+      <sc-for list="{{ catTabs }}" as="t" hint-placeholder-count="5">
+        <button onClick="{{ t.pick }}" style="flex:none; padding:8px 0 12px; border:0; border-bottom:2px solid {{ t.bd }}; background:none; font:600 14px/1 'Instrument Sans'; color:{{ t.fg }}; cursor:pointer">{{ t.name }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ isList }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1; overflow-y:auto; padding:0 16px 80px">
+    <sc-if value="{{ showBanner }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:14px; padding:12px 6px 12px 14px; border-radius:14px; background:#F3F2EE; display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:4px; align-items:center">
+        <div style="display:flex; flex-direction:column; gap:2px">
+          <span style="font:600 14px/1.3 'Instrument Sans'">Ajoute affiche à ton écran d'accueil</span>
+          <span style="font:400 12.5px/1.35 'Instrument Sans'; color:#6A6A66">Nécessaire pour recevoir les alertes sur iPhone.</span>
+        </div>
+        <button onClick="{{ openSheet }}" style="height:40px; padding:0 14px; border:0; border-radius:10px; background:#1E1E1C; color:#FFFFFF; font:600 13px/1 'Instrument Sans'; cursor:pointer">Comment&nbsp;?</button>
+        <button onClick="{{ closeBanner }}" style="width:36px; height:44px; border:0; background:none; color:#6A6A66; font:400 20px/1 'Instrument Sans'; cursor:pointer">×</button>
+      </div>
+    </sc-if>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:16px 0 2px">
+      <span style="font:600 14px/1.3 'Instrument Sans'">{{ resultLabel }}</span>
+      <div style="display:flex; gap:6px">
+        <sc-for list="{{ quickFilters }}" as="q" hint-placeholder-count="2">
+          <button onClick="{{ q.toggle }}" style="height:32px; padding:0 12px; border:1px solid {{ q.bd }}; border-radius:999px; background:{{ q.bg }}; color:{{ q.fg }}; font:500 13px/1 'Instrument Sans'; cursor:pointer">{{ q.name }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <sc-if value="{{ hasNew }}" hint-placeholder-val="{{ false }}"><span style="display:block; padding-top:4px; font:500 13px/1.3 'Instrument Sans'; color:#2E3BD6">{{ newLabel }}</span></sc-if>
+
+    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; padding:22px 0 12px">
+        <span style="font:600 18px/1.2 'Instrument Sans'; letter-spacing:-.01em">{{ g.label }}</span>
+        <span style="font:400 13px/1 'Instrument Sans'; color:#6A6A66">{{ g.sub }}</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:{{ cardGap }}">
+      <sc-for list="{{ g.items }}" as="ev" hint-placeholder-count="2">
+        <sc-if value="{{ cardBig }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ ev.open }}" style="display:flex; flex-direction:column; gap:10px; cursor:pointer; opacity:{{ ev.op }}">
+          <div style="position:relative; aspect-ratio:16/10; border-radius:14px; overflow:hidden; background:repeating-linear-gradient(135deg,#ECEAE4 0 6px,#F4F2EE 6px 12px); display:flex; align-items:flex-end; padding:10px">
+            <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace; color:#8F8D87">{{ ev.img }}</span>
+            <div style="position:absolute; top:10px; left:10px; display:flex; gap:6px">
+              <sc-if value="{{ ev.isNew }}" hint-placeholder-val="{{ false }}"><span style="height:26px; padding:0 9px; display:flex; align-items:center; border-radius:7px; background:#2E3BD6; color:#FFFFFF; font:600 12px/1 'Instrument Sans'">Nouveau</span></sc-if>
+              <span style="height:26px; padding:0 9px; display:flex; align-items:center; gap:6px; border-radius:7px; background:{{ ev.sBg }}; color:{{ ev.sFg }}; font:600 12px/1 'Instrument Sans'">{{ ev.status }}</span>
+            </div>
+            <button onClick="{{ ev.fav }}" style="position:absolute; top:4px; right:4px; width:44px; height:44px; border:0; background:none; cursor:pointer; font:400 24px/1 'Instrument Sans'; color:{{ ev.favFg }}; text-shadow:0 1px 4px rgba(0,0,0,.35)">{{ ev.favGlyph }}</button>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px">
+            <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
+              <span style="font:600 16px/1.25 'Instrument Sans'; text-wrap:pretty">{{ ev.title }}</span>
+              <span style="flex:none; font:600 15px/1.25 'Instrument Sans'">{{ ev.price }}</span>
+            </div>
+            <span style="font:500 14px/1.35 'Instrument Sans'">{{ ev.when }}</span>
+            <span style="font:400 14px/1.35 'Instrument Sans'; color:#6A6A66">{{ ev.where }}</span>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ cardSmall }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ ev.open }}" style="position:relative; display:grid; grid-template-columns:92px minmax(0,1fr); gap:14px; cursor:pointer; opacity:{{ ev.op }}">
+          <div style="position:relative; height:92px; border-radius:12px; background:repeating-linear-gradient(135deg,#ECEAE4 0 6px,#F4F2EE 6px 12px)">
+            <sc-if value="{{ ev.isNew }}" hint-placeholder-val="{{ false }}"><span style="position:absolute; top:6px; left:6px; height:20px; padding:0 6px; display:flex; align-items:center; border-radius:5px; background:#2E3BD6; color:#FFFFFF; font:600 10.5px/1 'Instrument Sans'">Nouveau</span></sc-if>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px; min-width:0; padding-right:34px">
+            <span style="font:600 15px/1.25 'Instrument Sans'">{{ ev.title }}</span>
+            <span style="font:500 13.5px/1.3 'Instrument Sans'">{{ ev.when }}</span>
+            <span style="font:400 13.5px/1.3 'Instrument Sans'; color:#6A6A66">{{ ev.where }}</span>
+            <div style="display:flex; align-items:center; gap:8px; padding-top:3px">
+              <span style="font:600 14px/1 'Instrument Sans'">{{ ev.price }}</span>
+              <span style="height:22px; padding:0 7px; display:flex; align-items:center; border-radius:6px; background:{{ ev.sBg }}; color:{{ ev.sFg }}; font:600 11.5px/1 'Instrument Sans'">{{ ev.status }}</span>
+            </div>
+          </div>
+          <button onClick="{{ ev.fav }}" style="position:absolute; top:-8px; right:-8px; width:44px; height:44px; border:0; background:none; cursor:pointer; font:400 22px/1 'Instrument Sans'; color:{{ ev.favFgS }}">{{ ev.favGlyph }}</button>
+        </div>
+        </sc-if>
+      </sc-for>
+      </div>
+    </sc-for>
+
+    <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:48px 8px; display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center">
+        <span style="font:600 18px/1.3 'Instrument Sans'">Rien sur ce créneau</span>
+        <span style="font:400 14px/1.45 'Instrument Sans'; color:#6A6A66; max-width:280px">{{ emptyMsg }}</span>
+        <button onClick="{{ widen }}" style="margin-top:6px; height:44px; padding:0 18px; border:1px solid #1E1E1C; border-radius:10px; background:#FFFFFF; font:600 14px/1 'Instrument Sans'; cursor:pointer">Élargir à toute la semaine</button>
+      </div>
+    </sc-if>
+    <p style="margin:28px 0 0; font:400 12px/1.5 'Instrument Sans'; color:#8F8D87; text-align:center">Événements passés masqués · un même événement n'apparaît qu'une fois<br>Sources : OpenAgenda, DATAtourisme, Ticketmaster · mis à jour il y a 2 h</p>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isMapView }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="03 Carte" style="flex:1; position:relative; overflow:hidden; background:repeating-linear-gradient(135deg,#E9E7E0 0 8px,#EFEDE7 8px 16px)">
+    <span style="position:absolute; top:12px; left:14px; font:500 10px/1.3 ui-monospace,Menlo,monospace; color:#8F8D87">carte — tuiles OpenStreetMap</span>
+    <span style="position:absolute; left:56%; top:46%; width:18px; height:18px; transform:translate(-50%,-50%); border-radius:50%; background:#2E3BD6; border:3px solid #FFFFFF; box-shadow:0 0 0 8px rgba(46,59,214,.16)"></span>
+    <sc-for list="{{ pins }}" as="p" hint-placeholder-count="0">
+      <button onClick="{{ p.select }}" style="position:absolute; left:{{ p.x }}%; top:{{ p.y }}%; transform:translate(-50%,-50%) scale({{ p.sc }}); z-index:{{ p.z }}; height:32px; padding:0 11px; border:0; border-radius:999px; background:{{ p.bg }}; color:{{ p.fg }}; font:600 13px/1 'Instrument Sans'; box-shadow:0 2px 8px rgba(0,0,0,.22); cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:5px">{{ p.label }}</button>
+    </sc-for>
+    <div style="position:absolute; left:12px; right:12px; bottom:72px; z-index:6">
+      <sc-for list="{{ mapCard }}" as="ev" hint-placeholder-count="0">
+        <div onClick="{{ ev.open }}" style="display:grid; grid-template-columns:96px minmax(0,1fr); gap:12px; padding:10px; background:#FFFFFF; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.18); cursor:pointer">
+          <div style="height:96px; border-radius:10px; background:repeating-linear-gradient(135deg,#ECEAE4 0 6px,#F4F2EE 6px 12px)"></div>
+          <div style="display:flex; flex-direction:column; gap:3px; min-width:0">
+            <span style="font:600 15px/1.25 'Instrument Sans'">{{ ev.title }}</span>
+            <span style="font:500 13.5px/1.3 'Instrument Sans'">{{ ev.when }}</span>
+            <span style="font:400 13px/1.3 'Instrument Sans'; color:#6A6A66">{{ ev.where }}</span>
+            <div style="display:flex; align-items:center; gap:8px; padding-top:3px">
+              <span style="font:600 14px/1 'Instrument Sans'">{{ ev.price }}</span>
+              <span style="height:22px; padding:0 7px; display:flex; align-items:center; border-radius:6px; background:{{ ev.sBg }}; color:{{ ev.sFg }}; font:600 11.5px/1 'Instrument Sans'">{{ ev.status }}</span>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <button onClick="{{ toggleView }}" style="position:absolute; left:50%; bottom:16px; transform:translateX(-50%); z-index:7; height:44px; padding:0 20px; border:0; border-radius:999px; background:#1E1E1C; color:#FFFFFF; font:600 14px/1 'Instrument Sans'; box-shadow:0 6px 18px rgba(0,0,0,.25); cursor:pointer">{{ viewToggleLabel }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isFavs }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="05 Favoris" style="height:100%; overflow-y:auto; padding:24px 16px 90px; display:flex; flex-direction:column; gap:6px">
+  <h1 style="margin:0 0 4px; font:600 28px/1.15 'Instrument Sans'; letter-spacing:-.02em">Favoris</h1>
+  <span style="font:400 13px/1.4 'Instrument Sans'; color:#6A6A66">Gardés sur ce téléphone uniquement.</span>
+  <sc-if value="{{ hasFavs }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex; flex-direction:column; padding-top:10px">
+      <sc-for list="{{ favList }}" as="ev" hint-placeholder-count="2">
+        <div onClick="{{ ev.open }}" style="position:relative; display:grid; grid-template-columns:72px minmax(0,1fr); gap:14px; padding:14px 0; border-bottom:1px solid #ECEAE5; cursor:pointer">
+          <div style="height:72px; border-radius:10px; background:repeating-linear-gradient(135deg,#ECEAE4 0 6px,#F4F2EE 6px 12px)"></div>
+          <div style="display:flex; flex-direction:column; gap:3px; min-width:0; padding-right:36px">
+            <span style="font:600 15px/1.25 'Instrument Sans'">{{ ev.title }}</span>
+            <span style="font:500 13.5px/1.3 'Instrument Sans'">{{ ev.when }}</span>
+            <div style="display:flex; align-items:center; gap:8px; padding-top:2px">
+              <span style="font:400 13px/1.3 'Instrument Sans'; color:#6A6A66">{{ ev.price }}</span>
+              <span style="height:22px; padding:0 7px; display:flex; align-items:center; border-radius:6px; background:{{ ev.sBg }}; color:{{ ev.sFg }}; font:600 11.5px/1 'Instrument Sans'">{{ ev.status }}</span>
+            </div>
+          </div>
+          <button onClick="{{ ev.fav }}" style="position:absolute; top:6px; right:-8px; width:44px; height:44px; border:0; background:none; cursor:pointer; font:400 22px/1 'Instrument Sans'; color:#D2402B">♥</button>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ noFavs }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:60px 10px; display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center">
+      <span style="font:600 17px/1.3 'Instrument Sans'">Aucun favori pour l'instant</span>
+      <span style="font:400 14px/1.45 'Instrument Sans'; color:#6A6A66; max-width:260px">Touche ♡ sur un événement pour le retrouver ici.</span>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAlerts }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="06 Alertes" style="height:100%; overflow-y:auto; padding:24px 16px 90px; display:flex; flex-direction:column; gap:18px">
+  <div style="display:flex; flex-direction:column; gap:4px">
+    <h1 style="margin:0; font:600 28px/1.15 'Instrument Sans'; letter-spacing:-.02em">Alertes</h1>
+    <span style="font:400 14px/1.45 'Instrument Sans'; color:#6A6A66">On te prévient quand un nouvel événement correspond à ta recherche.</span>
+  </div>
+  <div style="padding:16px; border:1px solid #E3E1DC; border-radius:16px; display:flex; flex-direction:column; gap:14px">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+      <div style="display:flex; flex-direction:column; gap:3px; min-width:0">
+        <span style="font:600 15px/1.3 'Instrument Sans'">{{ pillTitle }}</span>
+        <span style="font:400 13px/1.35 'Instrument Sans'; color:#6A6A66">{{ pillSub }}</span>
+      </div>
+      <button onClick="{{ toggleAlerts }}" style="flex:none; width:52px; height:32px; border:0; border-radius:999px; background:{{ swBg }}; position:relative; cursor:pointer">
+        <span style="position:absolute; top:3px; left:{{ swLeft }}; width:26px; height:26px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s"></span>
+      </button>
+    </div>
+    <sc-if value="{{ alertsOn }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px solid #ECEAE5">
+        <span style="font:600 13px/1 'Instrument Sans'; color:#6A6A66">Fréquence</span>
+        <sc-for list="{{ freqs }}" as="fq" hint-placeholder-count="2">
+          <button onClick="{{ fq.pick }}" style="display:flex; align-items:center; gap:12px; min-height:48px; padding:0 14px; border:1.5px solid {{ fq.bd }}; border-radius:12px; background:#FFFFFF; text-align:left; cursor:pointer">
+            <span style="flex:none; width:20px; height:20px; border-radius:50%; border:{{ fq.ring }}"></span>
+            <span style="display:flex; flex-direction:column; gap:2px"><span style="font:600 14px/1.2 'Instrument Sans'; color:#1E1E1C">{{ fq.name }}</span><span style="font:400 12.5px/1.2 'Instrument Sans'; color:#6A6A66">{{ fq.hint }}</span></span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:8px">
+    <span style="font:600 13px/1 'Instrument Sans'; color:#6A6A66">Aperçu de la notification</span>
+    <div style="padding:12px 14px; border-radius:16px; background:#F3F2EE; display:grid; grid-template-columns:36px minmax(0,1fr); gap:12px; align-items:center">
+      <span style="width:36px; height:36px; border-radius:9px; background:#1E1E1C; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font:700 15px/1 'Instrument Sans'">a</span>
+      <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+        <div style="display:flex; justify-content:space-between"><span style="font:600 13.5px/1.3 'Instrument Sans'">affiche</span><span style="font:400 12px/1.3 'Instrument Sans'; color:#8F8D87">maintenant</span></div>
+        <span style="font:400 13.5px/1.35 'Instrument Sans'">{{ notifText }}</span>
+      </div>
+    </div>
+  </div>
+  <div style="padding:14px 16px; border-radius:14px; background:#FFF4DC; display:flex; flex-direction:column; gap:8px">
+    <span style="font:600 14px/1.3 'Instrument Sans'; color:#5E3A00">Sur iPhone</span>
+    <span style="font:400 13.5px/1.45 'Instrument Sans'; color:#5E3A00">Les alertes ne marchent que si affiche est ajoutée à ton écran d'accueil.</span>
+    <button onClick="{{ openSheet }}" style="align-self:flex-start; height:40px; padding:0 14px; border:0; border-radius:10px; background:#5E3A00; color:#FFFFFF; font:600 13px/1 'Instrument Sans'; cursor:pointer">Voir comment faire</button>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="04 Fiche événement" style="position:absolute; inset:0; z-index:20; background:#FFFFFF; display:flex; flex-direction:column">
+  <div style="flex:1; overflow-y:auto">
+    <div style="position:relative; height:280px; background:repeating-linear-gradient(135deg,#ECEAE4 0 8px,#F4F2EE 8px 16px); display:flex; align-items:flex-end; padding:14px 16px 30px">
+      <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace; color:#8F8D87">{{ d.img }}</span>
+      <button onClick="{{ closeDetail }}" style="position:absolute; top:14px; left:14px; width:40px; height:40px; border:0; border-radius:50%; background:#FFFFFF; box-shadow:0 2px 8px rgba(0,0,0,.15); font:500 18px/1 'Instrument Sans'; cursor:pointer">←</button>
+      <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px">
+        <button onClick="{{ share }}" style="height:40px; padding:0 14px; border:0; border-radius:999px; background:#FFFFFF; box-shadow:0 2px 8px rgba(0,0,0,.15); font:600 13px/1 'Instrument Sans'; cursor:pointer">Partager</button>
+        <button onClick="{{ d.fav }}" style="width:40px; height:40px; border:0; border-radius:50%; background:#FFFFFF; box-shadow:0 2px 8px rgba(0,0,0,.15); font:400 19px/1 'Instrument Sans'; color:{{ d.favFgS }}; cursor:pointer">{{ d.favGlyph }}</button>
+      </div>
+    </div>
+    <div style="position:relative; margin-top:-18px; border-radius:20px 20px 0 0; background:#FFFFFF; padding:22px 20px 24px; display:flex; flex-direction:column; gap:18px">
+      <div style="display:flex; flex-direction:column; gap:10px">
+        <div style="display:flex; gap:6px; flex-wrap:wrap">
+          <sc-if value="{{ d.isNew }}" hint-placeholder-val="{{ false }}"><span style="height:26px; padding:0 9px; display:flex; align-items:center; border-radius:7px; background:#2E3BD6; color:#FFFFFF; font:600 12px/1 'Instrument Sans'">Nouveau</span></sc-if>
+          <span style="height:26px; padding:0 9px; display:flex; align-items:center; border-radius:7px; background:{{ d.sBg }}; color:{{ d.sFg }}; font:600 12px/1 'Instrument Sans'">{{ d.status }}</span>
+          <span style="height:26px; padding:0 9px; display:flex; align-items:center; border-radius:7px; background:#F3F2EE; font:500 12px/1 'Instrument Sans'">{{ d.catName }}</span>
+        </div>
+        <h1 style="margin:0; font:600 26px/1.15 'Instrument Sans'; letter-spacing:-.02em; text-wrap:balance">{{ d.title }}</h1>
+        <p style="margin:0; font:400 15px/1.5 'Instrument Sans'; color:#3F3F3B; text-wrap:pretty">{{ d.desc }}</p>
+      </div>
+      <div style="display:flex; flex-direction:column; border-top:1px solid #ECEAE5">
+        <div style="display:grid; grid-template-columns:88px minmax(0,1fr); gap:12px; padding:14px 0; border-bottom:1px solid #ECEAE5">
+          <span style="font:500 13px/1.4 'Instrument Sans'; color:#6A6A66">Quand</span>
+          <div style="display:flex; flex-direction:column; gap:2px"><span style="font:600 15px/1.4 'Instrument Sans'">{{ d.dates }}</span><span style="font:400 14px/1.4 'Instrument Sans'">{{ d.hours }}</span><span style="font:400 13px/1.4 'Instrument Sans'; color:#6A6A66">Durée : {{ d.dur }}</span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:88px minmax(0,1fr); gap:12px; padding:14px 0; border-bottom:1px solid #ECEAE5">
+          <span style="font:500 13px/1.4 'Instrument Sans'; color:#6A6A66">Où</span>
+          <div style="display:flex; flex-direction:column; gap:2px"><span style="font:600 15px/1.4 'Instrument Sans'">{{ d.venue }}</span><span style="font:400 14px/1.4 'Instrument Sans'">{{ d.addr }}</span><a href="#" style="font:600 14px/1.6 'Instrument Sans'">Itinéraire →</a></div>
+        </div>
+        <div style="display:grid; grid-template-columns:88px minmax(0,1fr); gap:12px; padding:14px 0; border-bottom:1px solid #ECEAE5">
+          <span style="font:500 13px/1.4 'Instrument Sans'; color:#6A6A66">Prix</span>
+          <span style="font:600 15px/1.4 'Instrument Sans'">{{ d.priceLong }}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:88px minmax(0,1fr); gap:12px; padding:14px 0; border-bottom:1px solid #ECEAE5">
+          <span style="font:500 13px/1.4 'Instrument Sans'; color:#6A6A66">Source</span>
+          <span style="font:400 14px/1.45 'Instrument Sans'">{{ d.src }}<br><span style="color:#6A6A66">Vérifié {{ d.upd }}</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="flex:none; padding:12px 20px 18px; border-top:1px solid #ECEAE5; display:flex; justify-content:space-between; align-items:center; gap:16px; background:#FFFFFF">
+    <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+      <span style="font:600 17px/1.2 'Instrument Sans'">{{ d.price }}</span>
+      <span style="font:400 12.5px/1.2 'Instrument Sans'; color:#6A6A66">{{ d.ctaSub }}</span>
+    </div>
+    <a href="#" style="flex:none; height:50px; padding:0 22px; display:flex; align-items:center; border-radius:12px; background:{{ d.ctaBg }}; color:{{ d.ctaFg }}; font:600 16px/1 'Instrument Sans'; text-decoration:none">{{ d.cta }}</a>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="02b Recherche" style="position:absolute; inset:0; z-index:30; background:#F5F4F0; display:flex; flex-direction:column">
+  <div style="flex:none; display:flex; align-items:center; justify-content:space-between; padding:14px 16px 6px">
+    <button onClick="{{ closeSearch }}" style="width:40px; height:40px; border:1px solid #DAD8D2; border-radius:50%; background:#FFFFFF; font:400 20px/1 'Instrument Sans'; cursor:pointer">×</button>
+    <span style="font:600 15px/1 'Instrument Sans'">Ta recherche</span>
+    <span style="width:40px"></span>
+  </div>
+  <div style="flex:1; overflow-y:auto; padding:10px 12px 20px; display:flex; flex-direction:column; gap:10px">
+
+    <sc-if value="{{ stepWhereOpen }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:20px 18px; border-radius:20px; background:#FFFFFF; box-shadow:0 4px 18px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:14px">
+        <h2 style="margin:0; font:600 24px/1.2 'Instrument Sans'; letter-spacing:-.02em">Où es-tu&nbsp;?</h2>
+        <input value="{{ cityQuery }}" onChange="{{ onCity }}" placeholder="Rechercher une ville" style="height:54px; padding:0 16px; border:1px solid #CFCDC6; border-radius:12px; background:#FFFFFF; font:500 16px/1 'Instrument Sans'; color:#1E1E1C; outline:none">
+        <div style="display:flex; flex-direction:column">
+          <button onClick="{{ useGeo }}" style="display:flex; align-items:center; gap:14px; min-height:56px; padding:0; border:0; background:none; text-align:left; cursor:pointer">
+            <span style="flex:none; width:44px; height:44px; border-radius:12px; background:#ECEDFB; color:#2E3BD6; display:flex; align-items:center; justify-content:center; font:600 18px/1 'Instrument Sans'">◎</span>
+            <span style="display:flex; flex-direction:column; gap:2px"><span style="font:600 15px/1.2 'Instrument Sans'; color:#1E1E1C">Autour de moi</span><span style="font:400 13px/1.2 'Instrument Sans'; color:#6A6A66">Utiliser ma position</span></span>
+          </button>
+          <sc-for list="{{ citySugg }}" as="cs" hint-placeholder-count="3">
+            <button onClick="{{ cs.pick }}" style="display:flex; align-items:center; gap:14px; min-height:56px; padding:0; border:0; background:none; text-align:left; cursor:{{ cs.cur }}">
+              <span style="flex:none; width:44px; height:44px; border-radius:12px; background:#F3F2EE; display:flex; align-items:center; justify-content:center; font:600 14px/1 'Instrument Sans'; color:#6A6A66">{{ cs.ini }}</span>
+              <span style="display:flex; flex-direction:column; gap:2px"><span style="font:600 15px/1.2 'Instrument Sans'; color:{{ cs.fg }}">{{ cs.name }}</span><span style="font:400 13px/1.2 'Instrument Sans'; color:#6A6A66">{{ cs.sub }}</span></span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ stepWhereClosed }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ openWhere }}" style="display:flex; justify-content:space-between; align-items:center; min-height:58px; padding:0 18px; border:0; border-radius:16px; background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,.06); cursor:pointer"><span style="font:500 14px/1 'Instrument Sans'; color:#6A6A66">Où</span><span style="font:600 14px/1 'Instrument Sans'; color:#1E1E1C">{{ whereSum }}</span></button>
+    </sc-if>
+
+    <sc-if value="{{ stepWhenOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:20px 18px; border-radius:20px; background:#FFFFFF; box-shadow:0 4px 18px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:14px">
+        <h2 style="margin:0; font:600 24px/1.2 'Instrument Sans'; letter-spacing:-.02em">Tu es là quand&nbsp;?</h2>
+        <div style="display:flex; gap:6px; flex-wrap:wrap">
+          <sc-for list="{{ shortcuts }}" as="sc" hint-placeholder-count="3">
+            <button onClick="{{ sc.pick }}" style="height:38px; padding:0 14px; border:1px solid {{ sc.bd }}; border-radius:999px; background:{{ sc.bg }}; color:{{ sc.fg }}; font:500 14px/1 'Instrument Sans'; cursor:pointer">{{ sc.name }}</button>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px">
+          <span style="font:600 14px/1 'Instrument Sans'; padding:4px 0">Octobre 2026</span>
+          <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); row-gap:4px">
+            <sc-for list="{{ dow }}" as="w" hint-placeholder-count="7"><span style="text-align:center; font:500 11px/1 'Instrument Sans'; color:#8F8D87; padding-bottom:6px">{{ w }}</span></sc-for>
+            <sc-for list="{{ dayGrid }}" as="dd" hint-placeholder-count="14">
+              <div style="height:46px; display:flex; align-items:center; justify-content:center; background:{{ dd.band }}; border-radius:{{ dd.bandR }}">
+                <button onClick="{{ dd.pick }}" style="width:42px; height:42px; border:0; border-radius:50%; background:{{ dd.bg }}; color:{{ dd.fg }}; font:600 15px/1 'Instrument Sans'; text-decoration:{{ dd.deco }}; cursor:{{ dd.cur }}">{{ dd.n }}</button>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font:400 12.5px/1.4 'Instrument Sans'; color:#6A6A66; padding-top:4px">{{ pickHint }}</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px solid #ECEAE5">
+          <span style="font:600 14px/1.2 'Instrument Sans'">Plutôt quel moment&nbsp;? <span style="font-weight:400; color:#6A6A66">(facultatif)</span></span>
+          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px">
+            <sc-for list="{{ momentChips }}" as="m" hint-placeholder-count="3">
+              <button onClick="{{ m.toggle }}" style="height:56px; border:1.5px solid {{ m.bd }}; border-radius:12px; background:{{ m.bg }}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer"><span style="font:600 14px/1 'Instrument Sans'; color:#1E1E1C">{{ m.name }}</span><span style="font:400 11.5px/1 'Instrument Sans'; color:#6A6A66">{{ m.hours }}</span></button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ stepWhenClosed }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ openWhen }}" style="display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:58px; padding:0 18px; border:0; border-radius:16px; background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,.06); cursor:pointer"><span style="font:500 14px/1 'Instrument Sans'; color:#6A6A66">Quand</span><span style="font:600 14px/1.2 'Instrument Sans'; color:#1E1E1C; text-align:right">{{ whenSum }}</span></button>
+    </sc-if>
+
+    <sc-if value="{{ stepWhatOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:20px 18px; border-radius:20px; background:#FFFFFF; box-shadow:0 4px 18px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:14px">
+        <div style="display:flex; justify-content:space-between; align-items:baseline"><h2 style="margin:0; font:600 24px/1.2 'Instrument Sans'; letter-spacing:-.02em">Quoi&nbsp;?</h2><span style="font:500 13px/1 'Instrument Sans'; color:#6A6A66">{{ catCountLabel }}</span></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap">
+          <sc-for list="{{ catTiles }}" as="c" hint-placeholder-count="10">
+            <button onClick="{{ c.toggle }}" style="height:40px; padding:0 14px; border:1.5px solid {{ c.bd }}; border-radius:999px; background:{{ c.bg }}; color:#1E1E1C; font:500 14px/1 'Instrument Sans'; cursor:pointer; opacity:{{ c.op }}">{{ c.name }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ stepWhatClosed }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ openWhat }}" style="display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:58px; padding:0 18px; border:0; border-radius:16px; background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,.06); cursor:pointer"><span style="flex:none; font:500 14px/1 'Instrument Sans'; color:#6A6A66">Quoi</span><span style="font:600 14px/1.25 'Instrument Sans'; color:#1E1E1C; text-align:right">{{ catsInline }}</span></button>
+    </sc-if>
+  </div>
+  <div style="flex:none; padding:12px 20px 18px; background:#FFFFFF; border-top:1px solid #ECEAE5; display:flex; justify-content:space-between; align-items:center">
+    <button onClick="{{ clearAll }}" style="height:44px; padding:0; border:0; background:none; font:600 15px/1 'Instrument Sans'; text-decoration:underline; color:#1E1E1C; cursor:pointer">Tout effacer</button>
+    <button onClick="{{ runSearch }}" style="height:50px; padding:0 24px; border:0; border-radius:12px; background:#2E3BD6; color:#FFFFFF; font:600 16px/1 'Instrument Sans'; cursor:pointer">{{ ctaLabel }}</button>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute; inset:0; z-index:40; background:rgba(20,20,18,.45); display:flex; align-items:flex-end" onClick="{{ closeSheet }}">
+  <div data-screen-label="07 Installer" onClick="{{ stop }}" style="width:100%; padding:10px 20px 24px; border-radius:22px 22px 0 0; background:#FFFFFF; display:flex; flex-direction:column; gap:16px">
+    <span style="align-self:center; width:36px; height:5px; border-radius:3px; background:#DAD8D2"></span>
+    <div style="display:flex; flex-direction:column; gap:6px">
+      <h2 style="margin:0; font:600 22px/1.2 'Instrument Sans'; letter-spacing:-.02em">Ajouter à l'écran d'accueil</h2>
+      <span style="font:400 14px/1.45 'Instrument Sans'; color:#6A6A66">affiche s'ouvrira comme une app, et tu pourras recevoir les alertes. Pas de store, pas de compte.</span>
+    </div>
+    <div style="display:flex; flex-direction:column">
+      <sc-for list="{{ installSteps }}" as="s" hint-placeholder-count="3">
+        <div style="display:grid; grid-template-columns:32px minmax(0,1fr); gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid #ECEAE5">
+          <span style="width:32px; height:32px; border-radius:50%; background:#F3F2EE; display:flex; align-items:center; justify-content:center; font:600 14px/1 'Instrument Sans'">{{ s.n }}</span>
+          <span style="font:400 15px/1.4 'Instrument Sans'">{{ s.a }} <strong style="font-weight:600">{{ s.b }}</strong> {{ s.c }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <button onClick="{{ closeSheet }}" style="height:50px; border:0; border-radius:12px; background:#1E1E1C; color:#FFFFFF; font:600 16px/1 'Instrument Sans'; cursor:pointer">J'ai compris</button>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute; left:50%; bottom:96px; transform:translateX(-50%); z-index:50; padding:12px 16px; border-radius:12px; background:#1E1E1C; color:#FFFFFF; font:500 14px/1 'Instrument Sans'; white-space:nowrap">{{ toast }}</div>
+</sc-if>
+</div>
+
+<sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+<nav style="flex:none; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid #ECEAE5; background:#FFFFFF; padding:6px 8px 12px">
+  <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3">
+    <button onClick="{{ tb.go }}" style="position:relative; height:50px; border:0; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer; color:{{ tb.fg }}">
+      <span style="width:5px; height:5px; border-radius:50%; background:{{ tb.dot }}"></span>
+      <span style="font:600 13px/1 'Instrument Sans'">{{ tb.name }}</span>
+      <sc-if value="{{ tb.badge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute; top:6px; left:calc(50% + 18px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#2E3BD6; color:#FFFFFF; font:600 11px/18px 'Instrument Sans'">{{ tb.badge }}</span></sc-if>
+    </button>
+  </sc-for>
+</nav>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;onboarding&quot;,&quot;explorer&quot;],&quot;default&quot;:&quot;onboarding&quot;,&quot;tsType&quot;:&quot;'onboarding'|'explorer'&quot;,&quot;section&quot;:&quot;Démo&quot;},&quot;cardStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;grande&quot;,&quot;compacte&quot;],&quot;default&quot;:&quot;grande&quot;,&quot;tsType&quot;:&quot;'grande'|'compacte'&quot;,&quot;section&quot;:&quot;Cartes&quot;},&quot;showInstallBanner&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Démo&quot;}}">
+const CATS=[
+{id:'expo',name:'Expositions',hint:'Peinture, photo, design'},
+{id:'musee',name:'Musées',hint:'Collections, nocturnes'},
+{id:'concert',name:'Concerts',hint:'Classique, jazz, actuel'},
+{id:'theatre',name:'Théâtre',hint:'Classique et création'},
+{id:'danse',name:'Danse',hint:'Ballet, contemporain'},
+{id:'cinema',name:'Cinéma',hint:'Avant-premières, ciné-concerts'},
+{id:'festival',name:'Festivals',hint:'Plein air, saisons'},
+{id:'visite',name:'Visites guidées',hint:'À pied, insolites'},
+{id:'patrimoine',name:'Patrimoine',hint:'Monuments, lieux cachés'},
+{id:'atelier',name:'Ateliers',hint:'Pour faire soi-même'}];
+const EV=[
+{id:1,cat:'expo',title:'Estampes du Japon, 1760–1860',venue:'Musée Guimet',addr:'6 place d\'Iéna, Paris 16e',from:1,to:31,allDay:1,hours:'10h–18h, fermé le mardi',dates:'Jusqu\'au 11 janvier 2027',dur:'1 h 30 conseillée',price:14,status:'ok',src:'OpenAgenda + site du musée',upd:'il y a 3 h',km:4.1,x:20,y:44,desc:'Plus de 200 estampes rarement montrées, de Harunobu à Hiroshige. Les œuvres tournent chaque mois pour des raisons de conservation.'},
+{id:2,cat:'concert',title:'Quatuor à cordes — Beethoven, op. 131',venue:'Philharmonie de Paris',addr:'221 av. Jean-Jaurès, Paris 19e',from:10,to:10,h:20,hours:'20h00',dates:'Samedi 10 octobre',dur:'1 h 45 avec entracte',price:25,from25:1,status:'soon',isNew:1,src:'Ticketmaster',upd:'il y a 40 min',km:5.2,x:80,y:18,desc:'Un des derniers quatuors de Beethoven, joué en intégralité. Moins de 30 places restantes au moment de la vérification.'},
+{id:3,cat:'theatre',title:'Les Fourberies de Scapin',venue:'Comédie-Française',addr:'1 place Colette, Paris 1er',from:9,to:11,h:20.5,hours:'20h30 (dimanche 14h00)',dates:'Du 9 au 11 octobre',dur:'2 h sans entracte',price:15,from25:1,status:'ok',src:'OpenAgenda',upd:'il y a 2 h',km:1.6,x:44,y:42,desc:'La comédie de Molière dans une mise en scène rythmée, accessible dès 10 ans.'},
+{id:4,cat:'visite',title:'Le Marais secret, visite à pied',venue:'Départ place des Vosges',addr:'Place des Vosges, Paris 4e',from:10,to:11,h:10.5,hours:'10h30',dates:'Samedi 10 et dimanche 11 octobre',dur:'2 h',price:18,status:'ok',isNew:1,src:'DATAtourisme',upd:'il y a 1 h',km:0.6,x:62,y:52,desc:'Cours d\'hôtels particuliers, passages et jardins qu\'on ne voit pas depuis la rue. Groupe de 15 personnes maximum.'},
+{id:5,cat:'patrimoine',title:'Crypte archéologique de l\'île de la Cité',venue:'Crypte archéologique',addr:'7 parvis Notre-Dame, Paris 4e',from:1,to:31,allDay:1,hours:'10h–18h, fermé le lundi',dates:'Toute l\'année',dur:'45 min',price:9,status:'ok',src:'DATAtourisme + site officiel',upd:'il y a 5 h',km:1.2,x:52,y:60,desc:'Les vestiges de Lutèce sous le parvis de Notre-Dame : quais gallo-romains, remparts et thermes.'},
+{id:6,cat:'danse',title:'Corps célestes, création',venue:'Théâtre de la Ville',addr:'2 place du Châtelet, Paris 4e',from:11,to:11,h:15,hours:'15h00',dates:'Dimanche 11 octobre',dur:'1 h 10',price:32,status:'full',src:'OpenAgenda',upd:'il y a 25 min',km:1.0,x:48,y:52,desc:'Pièce pour neuf danseurs sur une musique jouée en direct. Toutes les places sont vendues.'},
+{id:7,cat:'atelier',title:'Atelier gravure en famille',venue:'La Fabrique à estampes',addr:'14 rue Keller, Paris 11e',from:10,to:10,h:14,hours:'14h00',dates:'Samedi 10 octobre',dur:'2 h',price:25,status:'soon',isNew:1,src:'OpenAgenda',upd:'il y a 1 h',km:1.4,x:70,y:56,desc:'On grave, on encre, on imprime : chacun repart avec ses tirages. Dès 7 ans, matériel fourni.'},
+{id:8,cat:'festival',title:'La Nuit des cuivres',venue:'Parc de la Villette',addr:'211 av. Jean-Jaurès, Paris 19e',from:10,to:10,h:19,hours:'19h00–23h00',dates:'Samedi 10 octobre',dur:'4 h',price:0,status:'ok',src:'OpenAgenda + Ville de Paris',upd:'il y a 3 h',km:5.0,x:84,y:26,desc:'Fanfares et brass bands sur trois scènes en plein air. Entrée libre, sans réservation.'},
+{id:9,cat:'cinema',title:'Ciné-concert : Nosferatu',venue:'Cinémathèque française',addr:'51 rue de Bercy, Paris 12e',from:11,to:11,h:18.5,hours:'18h30',dates:'Dimanche 11 octobre',dur:'1 h 35',price:12,status:'ok',src:'Site de la Cinémathèque',upd:'il y a 4 h',km:3.1,x:72,y:76,desc:'Le film de Murnau (1922) accompagné au piano en direct.'},
+{id:10,cat:'concert',title:'Trio Lune Rousse',venue:'Club de jazz des Halles',addr:'42 rue des Lombards, Paris 1er',from:9,to:9,h:21,hours:'21h00',dates:'Vendredi 9 octobre',dur:'1 h 30',price:28,status:'closed',src:'Ticketmaster',upd:'il y a 2 h',km:0.9,x:50,y:44,desc:'Jazz acoustique, compositions originales. Vente en ligne terminée, quelques places possibles au guichet.'},
+{id:11,cat:'musee',title:'Nocturne au musée d\'Orsay',venue:'Musée d\'Orsay',addr:'1 rue de la Légion d\'Honneur, Paris 7e',from:8,to:8,h:18,hours:'18h00–21h45',dates:'Jeudi 8 octobre',dur:'Libre',price:16,status:'ok',src:'Site du musée',upd:'il y a 6 h',km:2.6,x:34,y:58,desc:'Les collections ouvertes en soirée, avec moins de monde qu\'en journée.'},
+{id:12,cat:'expo',title:'Paris la nuit, photographies 1930–1960',venue:'Musée Carnavalet',addr:'23 rue de Sévigné, Paris 3e',from:1,to:31,allDay:1,hours:'10h–18h, fermé le lundi',dates:'Jusqu\'au 4 avril 2027',dur:'1 h',price:0,status:'ok',isNew:1,src:'OpenAgenda + Paris Musées',upd:'il y a 1 h',km:0.4,x:60,y:47,desc:'Brassaï, Kertész et des photographes anonymes : la ville éclairée au gaz puis au néon. Entrée gratuite.'}];
+const DN=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+const DL=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const wd=d=>(d+3)%7;
+const TODAY=6;
+const ST={ok:['Disponible','#E2F0E6','#17613A'],soon:['Bientôt complet','#FDE9C2','#6E3D00'],full:['Complet','#1E1E1C','#FFFFFF'],closed:['Clôturé','#ECEAE5','#55534E']};
+const MOM=[{id:'m',name:'Matin',hours:'avant 12h'},{id:'a',name:'Après-midi',hours:'12h–18h'},{id:'s',name:'Soirée',hours:'après 18h'}];
+const CITIES=[{name:'Paris',sub:'Ville pilote · 1 240 événements',ok:1},{name:'Lyon',sub:'Bientôt'},{name:'Bordeaux',sub:'Bientôt'},{name:'Marseille',sub:'Bientôt'}];
+const fmtR=(a,b)=>!a?'Choisis tes dates':(a===b||!b)?`${DN[wd(a)]} ${a} oct.`:`${a} – ${b} oct.`;
+
+class Component extends DCLogic {
+  state={screen:this.props.startScreen==='explorer'?'explore':'onboard',cats:['expo','concert','theatre','visite'],city:'Paris',cityQuery:'',geo:false,start:10,end:11,picking:false,moments:[],step:'when',search:false,view:'list',tab:'all',free:false,near:false,favs:[3],detail:null,banner:true,sheet:false,alerts:true,freq:'now',toast:null,seen:[]};
+  componentDidMount(){if(this.state.screen==='onboard')this.setState({cats:[]});}
+  flash(t){this.setState({toast:t});clearTimeout(this._t);this._t=setTimeout(()=>this.setState({toast:null}),1800);}
+  filtered(o={}){
+    const s=this.state; if(s.city!=='Paris')return [];
+    const a=s.start||TODAY,b=s.end||a;
+    return EV.filter(e=>{
+      if(!s.cats.includes(e.cat))return false;
+      if(!o.noTab&&s.tab!=='all'&&e.cat!==s.tab)return false;
+      if(e.to<TODAY||e.to<a||e.from>b)return false;
+      if(s.moments.length&&!e.allDay){const m=e.h<12?'m':e.h<18?'a':'s';if(!s.moments.includes(m))return false;}
+      if(s.free&&e.price>0)return false;
+      if(s.near&&e.km>2)return false;return true;
+    }).map(e=>({...e,first:Math.max(e.from,a)})).sort((x,y)=>(x.allDay?0:1)-(y.allDay?0:1)||x.first-y.first||(x.h||0)-(y.h||0));
+  }
+  card(e){
+    const s=this.state,fav=s.favs.includes(e.id),st=ST[e.status];
+    const when=e.allDay?`Tous les jours · ${e.hours.split(',')[0]}`:`${DN[wd(e.first||e.from)]} ${e.first||e.from} oct. · ${e.hours.split(' ')[0]}`;
+    const price=e.price===0?'Gratuit':(e.from25?'dès ':'')+e.price+' €';
+    return {...e,when,price,where:`${e.venue} · ${s.geo?String(e.km).replace('.',',')+' km':e.addr.split(', ')[1]}`,img:`photo — ${e.title.toLowerCase()}`,
+      status:st[0],sBg:st[1],sFg:st[2],op:(e.status==='full'||e.status==='closed')?0.62:1,isNew:!!e.isNew,
+      favGlyph:fav?'♥':'♡',favFg:fav?'#E5533D':'#FFFFFF',favFgS:fav?'#D2402B':'#6A6A66',
+      open:()=>this.setState({detail:e.id}),
+      fav:(ev)=>{ev&&ev.stopPropagation&&ev.stopPropagation();this.setState(p=>({favs:p.favs.includes(e.id)?p.favs.filter(x=>x!==e.id):[...p.favs,e.id]}));if(!fav)this.flash('Ajouté aux favoris');}};
+  }
+  renderVals(){
+    const s=this.state,set=o=>this.setState(o);
+    const n=s.cats.length;
+    const selC=(on)=>on?{bg:'#1E1E1C',fg:'#FFFFFF',bd:'#1E1E1C'}:{bg:'#FFFFFF',fg:'#1E1E1C',bd:'#D6D4CE'};
+    const catTiles=CATS.map(c=>{const on=s.cats.includes(c.id),dis=!on&&n>=4;return {...c,bd:on?'#1E1E1C':'#E3E1DC',bg:on?'#F3F2EE':'#FFFFFF',op:dis?.4:1,
+      toggle:()=>{if(dis)return this.flash('4 catégories maximum');set({cats:on?s.cats.filter(x=>x!==c.id):[...s.cats,c.id],tab:'all'});}};});
+    const res=this.filtered();
+    const cards=res.map(e=>this.card(e));
+    const groups=[];const ong=cards.filter(c=>c.allDay);
+    if(ong.length)groups.push({label:'Pendant tout ton séjour',sub:`${ong.length} lieu${ong.length>1?'x':''}`,items:ong});
+    [...new Set(cards.filter(c=>!c.allDay).map(c=>c.first))].forEach(d=>{const it=cards.filter(c=>!c.allDay&&c.first===d);groups.push({label:d===TODAY?'Aujourd\'hui':`${DL[wd(d)]} ${d} octobre`,sub:`${it.length} événement${it.length>1?'s':''}`,items:it});});
+    const newN=res.filter(e=>e.isNew).length;
+    const cardStyle=this.props.cardStyle||'grande';
+    const momTxt=s.moments.length?MOM.filter(m=>s.moments.includes(m.id)).map(m=>m.name).join(', '):'';
+    const catsInline=n?s.cats.map(c=>CATS.find(x=>x.id===c).name).join(', '):'Aucune catégorie';
+    const whenSum=fmtR(s.start,s.end)+(momTxt?' · '+momTxt:'');
+    const shortcuts=[['Aujourd\'hui',6,6],['Ce week-end',10,11],['Cette semaine',6,11]].map(([name,a,b])=>{const on=s.start===a&&s.end===b;return {name,...selC(on),pick:()=>set({start:a,end:b,picking:false})};});
+    const dayGrid=Array.from({length:14},(_,i)=>{const d=5+i,past=d<TODAY,a=s.start,b=s.end||s.start;
+      const edge=d===a||d===b,mid=a&&b&&d>a&&d<b,inR=a&&b&&a!==b&&d>=a&&d<=b;
+      return {n:d,bg:edge?'#1E1E1C':'transparent',fg:edge?'#FFFFFF':past?'#C4C2BB':'#1E1E1C',deco:past?'line-through':'none',cur:past?'default':'pointer',
+        band:inR?'#F0EFEA':'transparent',bandR:inR?(d===a?'999px 0 0 999px':d===b?'0 999px 999px 0':'0'):'0',
+        pick:()=>{if(past)return;if(!s.picking||d<s.start)set({start:d,end:d,picking:true});else set({end:d,picking:false});}};});
+    const momentChips=MOM.map(m=>{const on=s.moments.includes(m.id);return {...m,bd:on?'#1E1E1C':'#E3E1DC',bg:on?'#F3F2EE':'#FFFFFF',toggle:()=>set({moments:on?s.moments.filter(x=>x!==m.id):[...s.moments,m.id]})};});
+    const allCount=this.filtered({noTab:true}).length;
+    const catTabs=[{id:'all',name:'Tout'},...s.cats.map(c=>CATS.find(x=>x.id===c))].map(t=>{const on=s.tab===t.id;return {name:t.name,bd:on?'#1E1E1C':'transparent',fg:on?'#1E1E1C':'#77756F',pick:()=>set({tab:t.id})};});
+    const quickFilters=[['Gratuit','free'],['À moins de 2 km','near']].map(([name,k])=>{const on=s[k];return {name,...selC(on),toggle:()=>{if(k==='near'&&!s.geo){set({geo:true,near:true});this.flash('Position utilisée : Paris 3e');}else set({[k]:!on});}};});
+    const sel=res.find(e=>e.id===s.selPin)||res.find(e=>!e.allDay)||res[0];
+    const pins=res.map(e=>{const on=sel&&e.id===sel.id;return {x:e.x,y:e.y,label:(e.price===0?'Gratuit':e.price+' €')+(e.isNew?' ·':''),bg:on?'#1E1E1C':'#FFFFFF',fg:on?'#FFFFFF':'#1E1E1C',sc:on?1.08:1,z:on?3:1,select:()=>set({selPin:e.id})};});
+    const dE=EV.find(e=>e.id===s.detail);let d={};
+    if(dE){const c=this.card({...dE,first:Math.max(dE.from,s.start||TODAY)});const blocked=dE.status==='full'||dE.status==='closed';
+      d={...c,catName:CATS.find(x=>x.id===dE.cat).name,priceLong:dE.price===0?'Gratuit, entrée libre':(dE.from25?'À partir de ':'')+dE.price+' € par personne',
+        cta:dE.price===0&&!blocked?'Page officielle ↗':blocked?'Page officielle ↗':'Réserver ↗',ctaBg:blocked?'#F3F2EE':'#2E3BD6',ctaFg:blocked?'#1E1E1C':'#FFFFFF',
+        ctaSub:blocked?(dE.status==='full'?'Plus de places disponibles':'Vente en ligne terminée'):`Sur ${dE.src.split(' + ')[0]}`};}
+    const favEv=EV.filter(e=>s.favs.includes(e.id)).map(e=>this.card({...e,first:Math.max(e.from,TODAY)}));
+    const canGo=n>0;
+    return {
+      isOnboard:s.screen==='onboard',isExplore:s.screen==='explore',isFavs:s.screen==='favs',isAlerts:s.screen==='alerts',isDetail:!!dE,d,
+      searchOpen:s.search,sheetOpen:s.sheet,toast:s.toast,showTabs:s.screen!=='onboard'&&!dE&&!s.search,
+      catTiles,catCountLabel:n?`${n} sur 4 choisie${n>1?'s':''}`:'Rien de choisi',ctaBg:canGo?'#1E1E1C':'#C4C2BB',
+      finishOnboard:()=>{if(!canGo)return this.flash('Choisis au moins une catégorie');set({screen:'explore',search:true,step:'where'});},
+      pillTitle:`${s.city}${s.geo?' · autour de moi':''}`,pillSub:`${fmtR(s.start,s.end)} · ${momTxt||'Toute la journée'} · ${n} catégorie${n>1?'s':''}`,
+      openSearch:()=>set({search:true,step:'when'}),closeSearch:()=>set({search:false}),
+      catTabs,quickFilters,isList:s.view==='list',isMapView:s.view==='map',toggleView:()=>set({view:s.view==='list'?'map':'list'}),viewToggleLabel:s.view==='list'?'Carte':'Liste',
+      showBanner:s.banner&&(this.props.showInstallBanner??true),closeBanner:()=>set({banner:false}),openSheet:()=>set({sheet:true}),closeSheet:()=>set({sheet:false}),stop:e=>e.stopPropagation(),
+      resultLabel:res.length?`${res.length} événement${res.length>1?'s':''}`:'Aucun événement',hasNew:newN>0,newLabel:`${newN} nouveau${newN>1?'x':''} depuis ta dernière visite`,
+      groups,noResults:res.length===0,cardBig:cardStyle==='grande',cardSmall:cardStyle==='compacte',cardGap:cardStyle==='grande'?'26px':'18px',
+      emptyMsg:s.city!=='Paris'?`On ne couvre pas encore ${s.city}. Paris est notre ville pilote.`:'Essaie d\'autres dates, un autre moment ou retire un filtre.',
+      widen:()=>set({start:6,end:11,moments:[],free:false,near:false,tab:'all',city:'Paris'}),
+      pins,mapCard:sel?[this.card(sel)]:[],
+      favList:favEv,hasFavs:favEv.length>0,noFavs:favEv.length===0,
+      alertsOn:s.alerts,toggleAlerts:()=>{set({alerts:!s.alerts});if(!s.alerts)this.flash('Alertes activées');},swBg:s.alerts?'#2E3BD6':'#CFCDC6',swLeft:s.alerts?'23px':'3px',
+      freqs:[['now','Dès qu\'il y a du nouveau','Une notification par nouvel événement'],['day','Une fois par jour','Un résumé à 9h']].map(([id,name,hint])=>{const on=s.freq===id;return {name,hint,bd:on?'#1E1E1C':'#E3E1DC',ring:on?'6px solid #1E1E1C':'1.5px solid #B8B6AF',pick:()=>set({freq:id})};}),
+      notifText:`${Math.max(newN,2)} nouveaux événements à ${s.city} pendant ton séjour (${fmtR(s.start,s.end)})`,
+      share:()=>this.flash('Lien copié'),closeDetail:()=>set({detail:null}),
+      stepWhereOpen:s.step==='where',stepWhereClosed:s.step!=='where',stepWhenOpen:s.step==='when',stepWhenClosed:s.step!=='when',stepWhatOpen:s.step==='what',stepWhatClosed:s.step!=='what',
+      openWhere:()=>set({step:'where'}),openWhen:()=>set({step:'when'}),openWhat:()=>set({step:'what'}),
+      whereSum:s.geo?'Autour de moi · Paris':s.city,cityQuery:s.cityQuery,onCity:e=>set({cityQuery:e.target.value}),
+      useGeo:()=>{set({geo:true,city:'Paris',step:'when'});this.flash('Position trouvée : Paris 3e');},
+      citySugg:CITIES.filter(c=>!s.cityQuery||c.name.toLowerCase().startsWith(s.cityQuery.toLowerCase())).map(c=>({...c,ini:c.name[0],fg:c.ok?'#1E1E1C':'#9A9892',cur:c.ok?'pointer':'default',pick:()=>c.ok?set({city:c.name,geo:false,step:'when',cityQuery:''}):this.flash(`${c.name} arrive bientôt`)})),
+      shortcuts,dayGrid,dow:['L','M','M','J','V','S','D'],momentChips,whenSum,catsInline,
+      pickHint:s.picking?'Touche maintenant ton jour de départ.':'Touche ton jour d\'arrivée, puis ton jour de départ.',
+      clearAll:()=>set({start:TODAY,end:TODAY,moments:[],geo:false,step:'when'}),
+      runSearch:()=>set({search:false,view:'list'}),ctaLabel:`Voir ${allCount} événement${allCount>1?'s':''}`,
+      installSteps:[{n:1,a:'Dans Safari, touche',b:'Partager',c:'(le carré avec une flèche).'},{n:2,a:'Fais défiler et choisis',b:'Sur l\'écran d\'accueil',c:'.'},{n:3,a:'Touche',b:'Ajouter',c:'en haut à droite.'}],
+      tabs:[['explore','Explorer'],['favs','Favoris'],['alerts','Alertes']].map(([id,name])=>{const on=s.screen===id;return {name,fg:on?'#1E1E1C':'#8F8D87',dot:on?'#2E3BD6':'transparent',badge:id==='favs'&&s.favs.length?String(s.favs.length):'',go:()=>set({screen:id})};})
+    };
+  }
+}
+</script>
+</body>
+</html>

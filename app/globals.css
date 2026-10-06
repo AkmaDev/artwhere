@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #1e1e1c;
+  --color-accent: #2e3bd6;
+  --color-accent-soft: #ecedfb;
+  --color-muted: #6a6a66;
+  --color-subtle: #8f8d87;
+  --color-faint: #9a9892;
+  --color-off: #c4c2bb;
+  --color-sand: #f3f2ee;
+  --color-sand-2: #f0efea;
+  --color-paper: #f5f4f0;
+  --color-line: #eceae5;
+  --color-border: #e3e1dc;
+  --color-border-2: #d6d4ce;
+  --color-border-3: #cfcdc6;
+  --color-stage: #e9e7e2;
+  --color-heart: #d2402b;
+  --color-heart-light: #e5533d;
+  --color-warn-bg: #fff4dc;
+  --color-warn-fg: #5e3a00;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-stage);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+a:hover {
+  color: var(--color-accent);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.placeholder-img {
+  background: repeating-linear-gradient(135deg, #eceae4 0 6px, #f4f2ee 6px 12px);
+}
+
+.balance {
+  text-wrap: balance;
+}
+.pretty {
+  text-wrap: pretty;
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}

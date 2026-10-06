@@ -1,0 +1,46 @@
+name: Ingestion des événements
+
+on:
+  schedule:
+    - cron: "15 */3 * * *"
+    - cron: "0 7 * * *"
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "ingest | daily"
+        default: ingest
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+      TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
+      OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
+      OPENAGENDA_AGENDAS_PARIS: ${{ vars.OPENAGENDA_AGENDAS_PARIS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Collecte + alertes immédiates
+        if: github.event.schedule == '15 */3 * * *' || (github.event_name == 'workflow_dispatch' && inputs.task == 'ingest')
+        run: npm run ingest
+      - name: Résumé quotidien (9h Paris)
+        if: github.event.schedule == '0 7 * * *' || github.event.schedule == '0 8 * * *'
+        run: npm run notify:daily
+      - name: Résumé quotidien (manuel)
+        if: github.event_name == 'workflow_dispatch' && inputs.task == 'daily'
+        run: npm run notify:daily -- --force
