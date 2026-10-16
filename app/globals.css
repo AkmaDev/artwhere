@@ -21,6 +21,9 @@
   --color-heart-light: #e5533d;
   --color-warn-bg: #fff4dc;
   --color-warn-fg: #5e3a00;
+  /* Urgence : même style que le statut « bientôt complet ». */
+  --color-urgent-bg: #fde9c2;
+  --color-urgent-fg: #6e3d00;
 }
 
 html,

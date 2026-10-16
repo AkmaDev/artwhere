@@ -3,7 +3,7 @@ import type { EventItem, EventStatus } from "./types";
 
 export const STATUS_STYLE: Record<EventStatus, { bg: string; fg: string }> = {
   available: { bg: "#E2F0E6", fg: "#17613A" },
-  almost_full: { bg: "#FDE9C2", fg: "#6E3D00" },
+  almost_full: { bg: "var(--color-urgent-bg)", fg: "var(--color-urgent-fg)" },
   full: { bg: "#1E1E1C", fg: "#FFFFFF" },
   closed: { bg: "#ECEAE5", fg: "#55534E" },
   cancelled: { bg: "#ECEAE5", fg: "#55534E" },
@@ -26,13 +26,24 @@ export function firstDay(e: EventItem, from: string | null, tz: string): string 
   return from && from > d ? from : d;
 }
 
+export const ordinalFr = (n: number) => (n === 1 ? "1er" : `${n}e`);
+
+/** Arrondissement tiré d'un code postal (Paris, Lyon, Marseille), sinon null. */
+export function arrondissement(text: string | null | undefined): { city: string; n: number } | null {
+  if (!text) return null;
+  const paris = text.match(/\b75(0\d{2}|116)\b/);
+  if (paris) return { city: "Paris", n: paris[1] === "116" ? 16 : Number(paris[1]) };
+  const lyon = text.match(/\b6900([1-9])\b/);
+  if (lyon) return { city: "Lyon", n: Number(lyon[1]) };
+  const marseille = text.match(/\b130(0[1-9]|1[0-6])\b/);
+  if (marseille) return { city: "Marseille", n: Number(marseille[1]) };
+  return null;
+}
+
 export function shortArea(address: string | null): string {
   if (!address) return "";
-  const m = address.match(/\b75(0\d{2}|116)\b/);
-  if (m) {
-    const n = m[1] === "116" ? 16 : Number(m[1]);
-    return `Paris ${n === 1 ? "1er" : `${n}e`}`;
-  }
+  const arr = arrondissement(address);
+  if (arr) return `${arr.city} ${ordinalFr(arr.n)}`;
   const parts = address.split(",").map((s) => s.trim());
   return parts[parts.length - 1].replace(/^\d{4,5}\s+/, "");
 }

@@ -676,6 +676,11 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             onClose={() => setDetail(null)}
             onFav={() => toggleFav(detail)}
             flash={flash}
+            venueUpcoming={
+              detail.venueName && events
+                ? events.filter((x) => x.kind === "event" && x.venueName?.toLowerCase() === detail.venueName!.toLowerCase()).length
+                : null
+            }
           />
         )}
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { money, STATUS_STYLE } from "@/lib/format";
 import type { EventItem, EventStatus } from "@/lib/types";
+import type { Urgency } from "@/lib/urgency";
 
 export function StatusBadge({ status, size = "md" }: { status: EventStatus; size?: "md" | "sm" }) {
   const t = useTranslations("status");
@@ -33,6 +34,25 @@ export function NewBadge({ size = "md" }: { size?: "md" | "sm" }) {
       }
     >
       {t("new")}
+    </span>
+  );
+}
+
+export function UrgencyBadge({ urgency, size = "md" }: { urgency: NonNullable<Urgency>; size?: "md" | "sm" }) {
+  const t = useTranslations("urgency");
+  const label =
+    urgency.key === "tonight" && urgency.lastSeats
+      ? t("tonightLastSeats")
+      : urgency.key === "daysLeft"
+        ? t("daysLeft", { days: urgency.days ?? 2 })
+        : t(urgency.key);
+  return (
+    <span
+      className={`flex items-center bg-urgent-bg leading-none font-semibold whitespace-nowrap text-urgent-fg ${
+        size === "md" ? "h-[26px] rounded-[7px] px-2 text-[12px]" : "h-[22px] rounded-[6px] px-[7px] text-[11.5px]"
+      }`}
+    >
+      {label}
     </span>
   );
 }

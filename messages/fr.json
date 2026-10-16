@@ -157,7 +157,23 @@
     "notFound": "Cet événement n'existe plus ou est terminé.",
     "backHome": "Voir les événements",
     "until": "Jusqu'au {date}",
-    "fromTo": "Du {a} au {b}"
+    "fromTo": "Du {a} au {b}",
+    "relay": "Artwhere relaie cet événement et n'en est pas l'organisateur.",
+    "report": "Signaler une erreur",
+    "reportSubject": "Erreur sur « {title} » ({id})"
+  },
+  "urgency": {
+    "lastSeats": "Dernières places",
+    "tonight": "Ce soir",
+    "tonightLastSeats": "Ce soir · dernières places",
+    "endsToday": "Se termine aujourd'hui",
+    "endsTomorrow": "Se termine demain",
+    "daysLeft": "Plus que {days} jours"
+  },
+  "venue": {
+    "upcoming": "{count, plural, =0 {Aucune date à venir} one {1 date à venir} other {# dates à venir}}",
+    "follow": "Suivre",
+    "following": "Suivi ✓"
   },
   "favs": {
     "title": "Favoris",

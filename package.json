@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
+    "test": "tsx --test \"lib/**/*.test.ts\"",
     "ingest": "tsx ingest/run.ts",
     "notify:daily": "tsx ingest/notify.ts --daily",
     "vapid": "web-push generate-vapid-keys"

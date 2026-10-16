@@ -3,9 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { fmtDayLong, fmtRelative, fmtTime, localDay } from "@/lib/dates";
 import { useIsIos } from "@/lib/device";
-import { isBlocked, money } from "@/lib/format";
+import { isBlocked, km, money } from "@/lib/format";
+import { cityLabel, getNeighborhood, joinDots } from "@/lib/neighborhood";
 import type { EventItem } from "@/lib/types";
-import { EventImage, NewBadge, StatusBadge, usePriceShort } from "./ui";
+import { getUrgency } from "@/lib/urgency";
+import { EventImage, NewBadge, StatusBadge, UrgencyBadge, usePriceShort } from "./ui";
+import { VenueBlock } from "./VenueBlock";
 
 interface Props {
   e: EventItem;
@@ -14,7 +17,11 @@ interface Props {
   onClose: () => void;
   onFav: () => void;
   flash: (s: string) => void;
+  /** Nombre de dates à venir au même lieu parmi les événements chargés (inconnu sur une fiche partagée). */
+  venueUpcoming?: number | null;
 }
+
+const CONTACT = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
 
 function fullDate(day: string, locale: string): string {
   const s = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(
@@ -23,7 +30,7 @@ function fullDate(day: string, locale: string): string {
   return s;
 }
 
-export function EventDetail({ e, isNew, isFav, onClose, onFav, flash }: Props) {
+export function EventDetail({ e, isNew, isFav, onClose, onFav, flash, venueUpcoming = null }: Props) {
   const t = useTranslations("detail");
   const tc = useTranslations("card");
   const tcat = useTranslations("categories");
@@ -56,6 +63,12 @@ export function EventDetail({ e, isNew, isFav, onClose, onFav, flash }: Props) {
 
   const sourceNames = e.sources.map((s) => (ts.has(s) ? ts(s) : s));
   const blocked = isBlocked(e.status);
+  const urgency = getUrgency(e);
+  // « Dernières places » remplace le badge de statut « bientôt complet » (pas de doublon).
+  const showStatus = !isPlace && !(e.status === "almost_full" && urgency);
+  const area = getNeighborhood(e) ?? cityLabel(e);
+  const whereLine2 = joinDots([area, e.distanceKm != null ? km(e.distanceKm, locale) : null]);
+  const whereLine1 = [e.venueName, e.address].filter(Boolean).join(", ");
   const href = blocked ? (e.officialUrl ?? e.ticketUrl) : (e.ticketUrl ?? e.officialUrl);
   const isBooking = !blocked && !!e.ticketUrl && e.priceMin !== 0;
   const ctaSub =
@@ -127,8 +140,9 @@ export function EventDetail({ e, isNew, isFav, onClose, onFav, flash }: Props) {
         <div className="relative -mt-[18px] flex flex-col gap-[18px] rounded-t-[20px] bg-white px-5 pt-[22px] pb-6">
           <div className="flex flex-col gap-2.5">
             <div className="flex flex-wrap gap-1.5">
+              {urgency && <UrgencyBadge urgency={urgency} />}
               {isNew && <NewBadge />}
-              {!isPlace && <StatusBadge status={e.status} />}
+              {showStatus && <StatusBadge status={e.status} />}
               {e.categories.map((c) => (
                 <span key={c} className="flex h-[26px] items-center rounded-[7px] bg-sand px-[9px] text-[12px] leading-none font-medium">
                   {tcat(`${c}.name`)}
@@ -152,8 +166,8 @@ export function EventDetail({ e, isNew, isFav, onClose, onFav, flash }: Props) {
             {row(
               t("where"),
               <div className="flex flex-col gap-0.5">
-                {e.venueName && <span className="text-[15px] leading-[1.4] font-semibold">{e.venueName}</span>}
-                {e.address && <span className="text-[14px] leading-[1.4]">{e.address}</span>}
+                {whereLine1 && <span className="text-[15px] leading-[1.4] text-ink">{whereLine1}</span>}
+                {whereLine2 && <span className="text-[15px] leading-[1.4] text-muted">{whereLine2}</span>}
                 <a href={directions} target="_blank" rel="noopener noreferrer" className="text-[14px] leading-[1.6] font-semibold text-ink">
                   {t("directions")}
                 </a>
@@ -162,13 +176,27 @@ export function EventDetail({ e, isNew, isFav, onClose, onFav, flash }: Props) {
             {(!isPlace || e.priceMin != null) && row(t("price"), <span className="text-[15px] leading-[1.4] font-semibold">{priceLong}</span>)}
             {row(
               t("source"),
-              <span className="text-[14px] leading-[1.45]">
-                {sourceNames.join(" + ")}
-                <br />
+              <span className="flex flex-col gap-0.5 text-[14px] leading-[1.45]">
+                <span className="text-ink">{sourceNames.join(" + ")}</span>
                 <span className="text-muted">{t("verified", { when: fmtRelative(e.lastCheckedAt, locale) })}</span>
               </span>,
             )}
           </div>
+          {!isPlace && e.venueName && <VenueBlock name={e.venueName} upcoming={venueUpcoming} />}
+          <p className={`m-0 text-[12px] leading-normal text-subtle ${isPlace ? "hidden" : ""}`}>
+            {t("relay")}
+            {CONTACT && (
+              <>
+                {" "}
+                <a
+                  href={`mailto:${CONTACT}?subject=${encodeURIComponent(t("reportSubject", { title: e.title, id: e.id }))}`}
+                  className="text-subtle underline"
+                >
+                  {t("report")}
+                </a>
+              </>
+            )}
+          </p>
         </div>
       </div>
       <div className="flex flex-none items-center justify-between gap-4 border-t border-line bg-white px-5 pt-3 pb-[18px]">

@@ -3,7 +3,8 @@
 import { useLocale, useTranslations } from "next-intl";
 import { isBlocked, km, shortArea, whenShort } from "@/lib/format";
 import type { EventItem } from "@/lib/types";
-import { EventImage, NewBadge, StatusBadge, usePriceShort } from "./ui";
+import { getUrgency } from "@/lib/urgency";
+import { EventImage, NewBadge, StatusBadge, UrgencyBadge, usePriceShort } from "./ui";
 
 export interface CardProps {
   e: EventItem;
@@ -26,6 +27,16 @@ export function EventCard({ e, from, isNew, isFav, onOpen, onFav, variant = "big
     : whenShort(e, from, e.timezone, locale, (date) => t("until", { date }));
   const where = `${e.venueName ?? ""}${e.distanceKm != null ? ` · ${km(e.distanceKm, locale)}` : e.address ? ` · ${shortArea(e.address)}` : ""}`;
   const dim = isBlocked(e.status) ? "opacity-[.62]" : "";
+  const urgency = getUrgency(e);
+  // Une seule ligne, deux badges au maximum ; « Dernières places » remplace le statut « bientôt complet ».
+  const showStatus = !isPlace && !(e.status === "almost_full" && urgency);
+  const badges = [
+    isNew && <NewBadge key="new" />,
+    urgency && <UrgencyBadge key="urg" urgency={urgency} />,
+    showStatus && <StatusBadge key="status" status={e.status} />,
+  ]
+    .filter(Boolean)
+    .slice(0, 2);
 
   const fav = (
     <button
@@ -67,7 +78,7 @@ export function EventCard({ e, from, isNew, isFav, onOpen, onFav, variant = "big
           <span className="truncate text-[13.5px] leading-[1.3] text-muted">{where}</span>
           <div className="flex items-center gap-2 pt-[3px]">
             <span className="text-[14px] leading-none font-semibold">{price}</span>
-            {!isPlace && <StatusBadge status={e.status} size="sm" />}
+            {urgency ? <UrgencyBadge urgency={urgency} size="sm" /> : !isPlace && <StatusBadge status={e.status} size="sm" />}
           </div>
         </div>
         {fav}
@@ -79,10 +90,7 @@ export function EventCard({ e, from, isNew, isFav, onOpen, onFav, variant = "big
     <article onClick={onOpen} className={`flex cursor-pointer flex-col gap-2.5 ${dim}`}>
       <div className="relative aspect-[16/10] overflow-hidden rounded-[14px]">
         <EventImage src={e.imageUrl} alt="" className="h-full w-full" />
-        <div className="absolute top-2.5 left-2.5 flex gap-1.5">
-          {isNew && <NewBadge />}
-          {!isPlace && <StatusBadge status={e.status} />}
-        </div>
+        <div className="absolute top-2.5 left-2.5 flex gap-1.5">{badges}</div>
         {fav}
       </div>
       <div className="flex flex-col gap-[3px]">
