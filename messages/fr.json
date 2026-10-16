@@ -219,7 +219,19 @@
     "sub": "Gardés sur ce téléphone uniquement.",
     "emptyTitle": "Aucun favori pour l'instant",
     "emptyMsg": "Touche ♡ sur un événement pour le retrouver ici.",
-    "past": "Terminé"
+    "past": "Terminé",
+    "events": "Événements · {count}",
+    "venues": "Lieux suivis · {count}"
+  },
+  "sync": {
+    "title": "Retrouver tes favoris sur un autre appareil",
+    "text": "Facultatif. Sans compte, tout reste sur ce téléphone.",
+    "cta": "Recevoir un lien par e-mail",
+    "nickname": "Pseudo facultatif, choisi ensuite.",
+    "email": "Ton e-mail",
+    "send": "Envoyer le lien",
+    "soon": "Bientôt disponible : aucun e-mail n'a été envoyé.",
+    "close": "Fermer"
   },
   "alerts": {
     "title": "Alertes",

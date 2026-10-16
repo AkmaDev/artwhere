@@ -822,7 +822,18 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         )}
 
         {screen === "favs" && (
-          <Favorites favs={Object.values(favs)} onOpen={openDetail} onRemove={toggleFav} />
+          <Favorites
+            favs={Object.values(favs)}
+            onOpen={openDetail}
+            onRemove={toggleFav}
+            venues={Object.entries(follows).map(([id, f]) => ({ id, name: f.name }))}
+            onOpenVenue={(v) => setVenue(v)}
+            onUnfollow={(id) => {
+              const f = follows[id];
+              if (f) toggleVenue(id, f.name, f.city);
+            }}
+            flash={flash}
+          />
         )}
 
         {screen === "alerts" && (
