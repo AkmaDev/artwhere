@@ -13,9 +13,10 @@ interface Props {
   onToggle: () => void;
   onFreq: (f: AlertPrefs["freq"]) => void;
   onHowTo: () => void;
+  onMyData: () => void;
 }
 
-export function Alerts({ alerts, busy, title, sub, notifText, showIosHint, onToggle, onFreq, onHowTo }: Props) {
+export function Alerts({ alerts, busy, title, sub, notifText, showIosHint, onToggle, onFreq, onHowTo, onMyData }: Props) {
   const t = useTranslations("alerts");
   const ta = useTranslations("app");
   const freqs: [AlertPrefs["freq"], string, string][] = [
@@ -104,6 +105,17 @@ export function Alerts({ alerts, busy, title, sub, notifText, showIosHint, onTog
           </button>
         </div>
       )}
+      <button
+        type="button"
+        onClick={onMyData}
+        className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-border bg-white px-4 text-left"
+      >
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[15px] leading-tight font-semibold text-ink">{t("myData")}</span>
+          <span className="text-[13px] leading-tight text-muted">{t("myDataHint")}</span>
+        </span>
+        <span aria-hidden className="text-[18px] leading-none text-muted">›</span>
+      </button>
     </div>
   );
 }

@@ -16,6 +16,8 @@ import {
   type Prefs,
 } from "@/lib/device";
 import { firstDay } from "@/lib/format";
+import { DEFAULT_PROFILE, topCities, type AgeRange, type Gender, type Profile } from "@/lib/profile";
+import { deleteProfile, sendProfile } from "@/lib/profile-client";
 import { disablePush, enablePush, updatePush, type Criteria } from "@/lib/push-client";
 import type { EventItem } from "@/lib/types";
 import { Alerts } from "./Alerts";
@@ -24,6 +26,7 @@ import { EventDetail } from "./EventDetail";
 import { Favorites } from "./Favorites";
 import { InstallSheet } from "./InstallSheet";
 import { Onboarding } from "./Onboarding";
+import { ProfileSheet } from "./ProfileSheet";
 import { SearchSheet, type Step } from "./SearchSheet";
 import { Pill, Toast } from "./ui";
 
@@ -46,6 +49,10 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const [alerts, setAlerts] = useStored<AlertPrefs>("alerts", { on: false, freq: "now" });
   const [bannerHidden, setBannerHidden] = useStored("bannerHidden", false);
   const [recent, setRecent] = useStored<Area[]>("recentAreas", []);
+  const [areaCounts, setAreaCounts] = useStored<Record<string, number>>("areaCounts", {});
+  const [profile, setProfile, profileReady] = useStored<Profile>("profile", DEFAULT_PROFILE);
+  const [profileSheet, setProfileSheet] = useState<"ask" | "edit" | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
   const [areaBusy, setAreaBusy] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
 
@@ -96,10 +103,10 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const from = prefs.from && prefs.from >= today ? prefs.from : today;
   const to = prefs.to && prefs.to >= from ? prefs.to : from;
 
-  const flash = useCallback((s: string) => {
+  const flash = useCallback((s: string, ms = 1800) => {
     setToast(s);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 1800);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
   }, []);
 
   const setPrefs = useCallback((p: Partial<Prefs>) => setPrefsRaw((prev) => ({ ...prev, ...p })), [setPrefsRaw]);
@@ -221,6 +228,25 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alerts.on, criteriaKey, today]);
 
+  // Profil anonyme : synchronisé seulement après consentement, à chaque changement (et une fois par session).
+  const cities = useMemo(() => topCities(areaCounts), [areaCounts]);
+  const profileKey = JSON.stringify([prefs.cats, profile.ageRange, profile.gender, cities]);
+  const lastProfile = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready || !profileReady || !profile.consent) {
+      lastProfile.current = null;
+      return;
+    }
+    if (lastProfile.current === profileKey) return;
+    const timer = setTimeout(() => {
+      sendProfile({ categories: prefs.cats, ageRange: profile.ageRange, gender: profile.gender, topCities: cities }).then((ok) => {
+        if (ok) lastProfile.current = profileKey;
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, profileReady, profile.consent, profileKey]);
+
   if (!ready) return null;
 
   const isNew = (e: EventItem) => !!prevVisit && e.firstDetectedAt > prevVisit;
@@ -233,21 +259,64 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       else next[e.id] = e;
       return next;
     });
-    if (!had) flash(t("toast.favAdded"));
+    if (!had) {
+      flash(t("toast.favAdded"));
+      if (profileReady && !profile.asked) setProfileSheet("ask");
+    }
   };
 
-  const requestGeo = (then: (lat: number, lng: number) => void) => {
-    if (!("geolocation" in navigator)) return flash(t("search.geoDenied"));
-    navigator.geolocation.getCurrentPosition(
-      (pos) => then(pos.coords.latitude, pos.coords.longitude),
-      () => flash(t("search.geoDenied")),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
-    );
+  const saveProfile = async (ageRange: AgeRange | null, gender: Gender | null) => {
+    setProfileBusy(true);
+    const ok = await sendProfile({ categories: prefs.cats, ageRange, gender, topCities: cities });
+    setProfileBusy(false);
+    if (!ok) return flash(t("profile.failed"));
+    lastProfile.current = JSON.stringify([prefs.cats, ageRange, gender, cities]);
+    setProfile({ asked: true, consent: true, ageRange, gender });
+    setProfileSheet(null);
+    flash(t("profile.saved"));
+  };
+
+  const closeProfile = () => {
+    setProfile((p) => ({ ...p, asked: true }));
+    setProfileSheet(null);
+  };
+
+  const withdrawProfile = async () => {
+    setProfileBusy(true);
+    const ok = await deleteProfile();
+    setProfileBusy(false);
+    if (!ok) return flash(t("profile.failed"));
+    setProfile({ asked: true, consent: false, ageRange: null, gender: null });
+    setProfileSheet(null);
+    flash(t("profile.withdrawn"));
+  };
+
+  // Codes GeolocationPositionError : 1 refusée, 2 indisponible, 3 délai dépassé.
+  const geoError = (code: number) =>
+    flash(t(code === 1 ? (ios ? "search.geoBlockedIos" : "search.geoBlocked") : code === 3 ? "search.geoTimeout" : "search.geoUnavailable"), 7000);
+
+  const requestGeo = async (then: (lat: number, lng: number) => void) => {
+    if (!("geolocation" in navigator)) return geoError(2);
+    // Une permission déjà refusée ne redéclenche pas la demande du navigateur : on explique directement.
+    try {
+      const st = await navigator.permissions?.query({ name: "geolocation" });
+      if (st?.state === "denied") return geoError(1);
+    } catch {}
+    flash(t("search.geoLocating"), 20000);
+    // D'abord rapide (réseau, cache 5 min), puis précis si la position n'arrive pas.
+    const attempt = (precise: boolean) =>
+      navigator.geolocation.getCurrentPosition(
+        (pos) => then(pos.coords.latitude, pos.coords.longitude),
+        (err) => (!precise && err.code !== 1 ? attempt(true) : geoError(err.code)),
+        precise ? { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 } : { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 },
+      );
+    attempt(false);
   };
 
   const chooseArea = (a: Area, geo: { lat: number; lng: number } | null = null) => {
     setPrefs({ area: a, geo });
     setRecent((prev) => [a, ...prev.filter((x) => x.slug !== a.slug)].slice(0, 5));
+    setAreaCounts((prev) => ({ ...prev, [a.slug]: (prev[a.slug] ?? 0) + 1 }));
     setStep("when");
   };
 
@@ -595,6 +664,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             onToggle={toggleAlerts}
             onFreq={(freq) => setAlerts({ ...alerts, freq })}
             onHowTo={() => setSheet(true)}
+            onMyData={() => setProfileSheet("edit")}
           />
         )}
 
@@ -633,6 +703,16 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         )}
 
         {sheet && <InstallSheet ios={ios} onClose={() => setSheet(false)} />}
+        {profileSheet && (
+          <ProfileSheet
+            mode={profileSheet}
+            profile={profile}
+            busy={profileBusy}
+            onSave={saveProfile}
+            onClose={closeProfile}
+            onWithdraw={withdrawProfile}
+          />
+        )}
         <Toast text={toast} />
       </div>
 

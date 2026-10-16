@@ -70,7 +70,7 @@ export function Toast({ text }: { text: string | null }) {
   return (
     <div
       role="status"
-      className="absolute bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-ink px-4 py-3 text-[14px] leading-none font-medium whitespace-nowrap text-white"
+      className="absolute bottom-24 left-1/2 z-50 w-max max-w-[calc(100%-32px)] -translate-x-1/2 rounded-xl bg-ink px-4 py-3 text-center text-[14px] leading-[1.35] font-medium text-white"
     >
       {text}
     </div>

@@ -45,5 +45,10 @@ Agendas OpenAgenda suivis à Paris : Philharmonie (504556), FICEP (61665301), Ce
 - **Dédoublonnage** : titre proche (trigrammes > 0,6) + même lieu (nom ou < 200 m) + dates qui se chevauchent → fusion, sources cumulées.
 - **Fraîcheur** : la recherche exclut ce qui est terminé ; un événement qui disparaît de sa source est masqué ; les statuts complet / clôturé l'emportent.
 
+## Profils anonymes et statistiques
+- **Collecte progressive** : centres d'intérêt à l'accueil ; tranche d'âge et genre proposés (facultatifs) au premier favori ; les 3 villes les plus consultées sont déduites des recherches. Modifiable dans Alertes › Mes données.
+- **Consentement** : rien n'est envoyé tant que la case n'est pas cochée. Le profil est lié à l'identifiant aléatoire de l'appareil (table `user_profiles`, migration `0006`), jamais à un nom ou un email. Retirer son accord efface la ligne immédiatement (`DELETE /api/profile`). Texte : `/confidentialite` (contact via `NEXT_PUBLIC_CONTACT_EMAIL`).
+- **Statistiques** : `/admin`, protégée par `ADMIN_PASSWORD` (variable Vercel). Uniquement des agrégats (fonction SQL `profile_stats()`, non exposée à l'API publique) et un export CSV des agrégats.
+
 ## GitHub Actions
 Secrets à créer : `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `TICKETMASTER_API_KEY`, `OPENAGENDA_API_KEY`. Variable : `OPENAGENDA_AGENDAS_PARIS`.
