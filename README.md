@@ -49,6 +49,15 @@ Agendas OpenAgenda suivis à Paris : Philharmonie (504556), FICEP (61665301), Ce
 - **Collecte progressive** : centres d'intérêt à l'accueil ; tranche d'âge et genre proposés (facultatifs) au premier favori ; les 3 villes les plus consultées sont déduites des recherches. Modifiable dans Alertes › Mes données.
 - **Consentement** : rien n'est envoyé tant que la case n'est pas cochée. Le profil est lié à l'identifiant aléatoire de l'appareil (table `user_profiles`, migration `0006`), jamais à un nom ou un email. Retirer son accord efface la ligne immédiatement (`DELETE /api/profile`). Texte : `/confidentialite` (contact via `NEXT_PUBLIC_CONTACT_EMAIL`).
 - **Statistiques** : `/admin`, protégée par `ADMIN_PASSWORD` (variable Vercel). Uniquement des agrégats (fonction SQL `profile_stats()`, non exposée à l'API publique) et un export CSV des agrégats.
+- **Goûts** (`lib/taste.ts`) : un score par catégorie (favori +1, Quick Match Garder +2 / Passer −1, bornes −10/+20), stocké sur l'appareil ; il ordonne les rangées d'Explorer. Envoyé (colonne `user_profiles.taste`, migration `0007`) seulement avec le consentement, jamais la liste des événements vus.
+
+## Lieux suivis
+- Identifiant de lieu : `{ville}--{venue_norm}` (`lib/venue.ts`), page `/l/[id]`, API `/api/venues/[id]`.
+- Les lieux suivis restent sur l'appareil ; avec les alertes actives, leurs clés sont envoyées avec l'abonnement (`push_subscriptions.venues`) et `ingest/notify.ts` prévient des nouveaux événements de ces lieux. **Nécessite la migration `0007`.**
+
+## Drapeaux
+- `NEXT_PUBLIC_QUICK_MATCH=1` : carte Quick Match dans Explorer (désactivée par défaut).
+- `NEXT_PUBLIC_SYNC=1` : carte de synchro dans Favoris, **interface seule** (aucun e-mail envoyé, pas de serveur).
 
 ## GitHub Actions
 Secrets à créer : `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `TICKETMASTER_API_KEY`, `OPENAGENDA_API_KEY`. Variable : `OPENAGENDA_AGENDAS_PARIS`.

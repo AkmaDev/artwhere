@@ -35,6 +35,7 @@ import { disablePush, enablePush, notifPermission, updatePush, type Criteria, ty
 import { matchesShortcut, SHORTCUT_IDS, type ShortcutId } from "@/lib/shortcuts";
 import type { EventItem } from "@/lib/types";
 import { getUrgency, isLastChance, urgencyEnd } from "@/lib/urgency";
+import { addSeen, buildDeck, DECK_MIN, rankRows, recordSwipe, type TasteScores } from "@/lib/taste";
 import { venueId } from "@/lib/venue";
 import { Alerts } from "./Alerts";
 import { CategoryRow } from "./CategoryRow";
@@ -49,7 +50,10 @@ import { NotifPrimer } from "./NotifPrimer";
 import { Onboarding } from "./Onboarding";
 import { ProfileFlow } from "./profile/ProfileFlow";
 import { ProfileInvite } from "./profile/ProfileInvite";
+import { QuickMatch } from "./QuickMatch";
+import { QuickMatchTeaser } from "./QuickMatchTeaser";
 import { SearchSheet, type Step } from "./SearchSheet";
+import type { SwipeDir } from "./SwipeCard";
 import { ShortcutPills, type ShortcutItem } from "./ShortcutPills";
 import { Toast } from "./ui";
 import { VenuePage } from "./VenuePage";
@@ -63,6 +67,7 @@ type HomeFilter ={ kind: "shortcut"; id: ShortcutId } | { kind: "cat"; id: Categ
 const PAGE = 30;
 const ONGOING_PREVIEW = 4;
 const AREA_POLL_MS = 15000;
+const QUICK_MATCH = process.env.NEXT_PUBLIC_QUICK_MATCH === "1";
 type BeforeInstallPrompt = Event & { prompt: () => Promise<void> };
 
 export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "compact" }) {
@@ -77,6 +82,12 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   // Lieux suivis : possédés ici (une seule instance de useStored) et passés aux écrans.
   const { follows, ready: followsReady, isFollowing, toggleFollow } = useFollows();
   const [venue, setVenue] = useState<{ id: string; name: string } | null>(null);
+  // Goûts appris (null = pas encore initialisés : on part des favoris existants).
+  const [taste, setTaste, tasteReady] = useStored<TasteScores | null>("tasteScores", null);
+  const [seen, setSeen] = useStored<string[]>("quickMatchSeen", []);
+  const [qmPool, setQmPool] = useState<EventItem[] | null>(null);
+  const [qmDeck, setQmDeck] = useState<EventItem[] | null>(null);
+  const qmKeptFav = useRef(false);
   const [bannerHidden, setBannerHidden] = useStored("bannerHidden", false);
   const [recent, setRecent] = useStored<Area[]>("recentAreas", []);
   const [areaCounts, setAreaCounts] = useStored<Record<string, number>>("areaCounts", {});
@@ -255,6 +266,34 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
+  useEffect(() => {
+    if (!tasteReady || taste !== null || !ready) return;
+    let s: TasteScores = {};
+    for (const f of Object.values(favs)) s = recordSwipe(s, f.categories, "fav");
+    setTaste(s);
+  }, [tasteReady, taste, ready, favs, setTaste]);
+
+  // Quick Match : la recherche courante, toutes catégories (pour découvrir), chargée seulement si le drapeau est actif.
+  const qmKey = useMemo(() => {
+    if (!QUICK_MATCH || !ready || !today || !area) return null;
+    const p = new URLSearchParams({ city: area.slug, from, to, cats: CATEGORY_IDS.join(",") });
+    if (prefs.moments.length) p.set("moments", prefs.moments.join(","));
+    if (prefs.geo) {
+      p.set("lat", String(prefs.geo.lat));
+      p.set("lng", String(prefs.geo.lng));
+    }
+    return p.toString();
+  }, [ready, today, area, from, to, prefs.moments, prefs.geo]);
+  useEffect(() => {
+    if (!qmKey) return;
+    const ctrl = new AbortController();
+    fetch(`/api/events?${qmKey}`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { events: EventItem[] } | null) => setQmPool(d?.events ?? null))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [qmKey]);
+
   const criteria: Criteria = useMemo(
     () => ({ city: area?.slug ?? "", from, to, cats: prefs.cats, moments: prefs.moments, frequency: alerts.freq, venues: followKeys(follows) }),
     [area, from, to, prefs.cats, prefs.moments, alerts.freq, follows],
@@ -273,7 +312,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
 
   // Profil anonyme : synchronisé seulement après consentement, à chaque changement (et une fois par session).
   const cities = useMemo(() => topCities(areaCounts), [areaCounts]);
-  const profileKey = JSON.stringify([prefs.cats, profile.ageRange, profile.gender, cities]);
+  const tasteOut = useMemo(() => taste ?? {}, [taste]);
+  const profileKey = JSON.stringify([prefs.cats, profile.ageRange, profile.gender, cities, tasteOut]);
   const lastProfile = useRef<string | null>(null);
   useEffect(() => {
     if (!ready || !profileReady || !profile.consent) {
@@ -282,7 +322,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     }
     if (lastProfile.current === profileKey) return;
     const timer = setTimeout(() => {
-      sendProfile({ categories: prefs.cats, ageRange: profile.ageRange, gender: profile.gender, topCities: cities }).then((ok) => {
+      sendProfile({ categories: prefs.cats, ageRange: profile.ageRange, gender: profile.gender, topCities: cities, taste: tasteOut }).then((ok) => {
         if (ok) lastProfile.current = profileKey;
       });
     }, 800);
@@ -294,7 +334,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
 
   const isNew = (e: EventItem) => !!prevVisit && e.firstDetectedAt > prevVisit;
   const isFav = (id: string) => !!favs[id];
-  const toggleFav = (e: EventItem) => {
+  const toggleFav = (e: EventItem, quiet = false) => {
     const had = !!favs[e.id];
     setFavs((prev) => {
       const next = { ...prev };
@@ -302,7 +342,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       else next[e.id] = e;
       return next;
     });
-    if (had) return;
+    if (had || quiet) return;
+    setTaste((s) => recordSwipe(s ?? {}, e.categories, "fav"));
     // 1er favori (puis une fois au 3e après « Plus tard ») : l'invitation au profil remplace le toast.
     const count = favIds.length + 1;
     if (profileReady && promptReady && shouldInvite(prompt, profile, count)) setProfileUi({ kind: "invite", variant: "invite" });
@@ -337,10 +378,10 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
 
   const finishProfile = async (ageRange: AgeRange | null, gender: Gender | null) => {
     setProfileBusy(true);
-    const ok = await sendProfile({ categories: prefs.cats, ageRange, gender, topCities: cities });
+    const ok = await sendProfile({ categories: prefs.cats, ageRange, gender, topCities: cities, taste: tasteOut });
     setProfileBusy(false);
     if (!ok) return flash(t("profile.failed"));
-    lastProfile.current = JSON.stringify([prefs.cats, ageRange, gender, cities]);
+    lastProfile.current = JSON.stringify([prefs.cats, ageRange, gender, cities, tasteOut]);
     setProfile({ consent: true, ageRange, gender, answeredAt: new Date().toISOString() });
     setPrompt((p) => ({ ...p, done: true }));
     setProfileUi(null);
@@ -354,6 +395,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     setProfileBusy(false);
     if (!ok) return flash(t("profile.failed"));
     setProfile(DEFAULT_PROFILE);
+    setTaste({});
+    setSeen([]);
     setPrompt((p) => ({ ...p, done: true }));
     setProfileUi(null);
     flash(t("profile.withdrawn"));
@@ -516,13 +559,29 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     .filter((e) => isLastChance(getUrgency(e)))
     .sort((a, b) => urgencyEnd(a) - urgencyEnd(b))
     .slice(0, 10);
-  // Ordre des rangées : catégories les plus mises en favori, puis les plus fournies.
-  const favByCat: Record<string, number> = {};
-  for (const f of Object.values(favs)) for (const c of f.categories) favByCat[c] = (favByCat[c] ?? 0) + 1;
-  const rows = (prefs.cats.length ? prefs.cats : [...CATEGORY_IDS])
-    .map((cat) => ({ cat, events: allEvs.filter((e) => e.categories.includes(cat)).sort((a, b) => a.nextAt.localeCompare(b.nextAt)) }))
-    .filter((r) => r.events.length)
-    .sort((a, b) => (favByCat[b.cat] ?? 0) - (favByCat[a.cat] ?? 0) || b.events.length - a.events.length);
+  // Ordre des rangées : goûts appris (favoris +1, Quick Match), puis catégories les plus fournies.
+  const rows = rankRows(
+    (prefs.cats.length ? prefs.cats : [...CATEGORY_IDS])
+      .map((cat) => ({ cat, events: allEvs.filter((e) => e.categories.includes(cat)).sort((a, b) => a.nextAt.localeCompare(b.nextAt)) }))
+      .filter((r) => r.events.length),
+    tasteOut,
+  );
+  const qmAvailable = QUICK_MATCH && qmPool ? buildDeck(qmPool, { favIds: new Set(favIds), seen: new Set(seen) }) : [];
+  const showTeaser = qmAvailable.length >= DECK_MIN;
+  const onSwipe = (e: EventItem, dir: SwipeDir) => {
+    setSeen((s) => addSeen(s, e.id));
+    setTaste((s) => recordSwipe(s ?? {}, e.categories, dir));
+    if (dir === "keep" && !favs[e.id]) {
+      toggleFav(e, true);
+      qmKeptFav.current = true;
+    }
+  };
+  // Fermeture : l'invitation au profil, si elle est due, arrive après la série, jamais au milieu.
+  const closeQuickMatch = () => {
+    setQmDeck(null);
+    if (qmKeptFav.current && profileReady && promptReady && shouldInvite(prompt, profile, favIds.length)) setProfileUi({ kind: "invite", variant: "invite" });
+    qmKeptFav.current = false;
+  };
   const pillSub = `${range} · ${momTxt || t("moments.allDay")} · ${t("explore.catCount", { n })}`;
   const sourceNames = [...new Set(all.flatMap((e) => e.sources))].map((s) => (t.has(`sources.${s}`) ? t(`sources.${s}`) : s));
   const showBanner = !standalone && !bannerHidden && (ios || !!installEvt);
@@ -692,6 +751,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                     {endingSoon.length >= 2 && (
                       <EndingSoonRow events={endingSoon} isFav={isFav} onOpen={openDetail} onFav={toggleFav} onSeeAll={() => setFilter({ kind: "urgent" })} />
                     )}
+                    {showTeaser && <QuickMatchTeaser count={qmAvailable.length} city={area?.name ?? ""} onPlay={() => setQmDeck(qmAvailable)} />}
                     {rows.map((r) => (
                       <CategoryRow
                         key={r.cat}
@@ -857,6 +917,18 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
           />
         )}
 
+        {qmDeck && (
+          <QuickMatch
+            deck={qmDeck}
+            canReplay={showTeaser}
+            paused={!!detail || !!venue}
+            onSwipe={onSwipe}
+            onOpen={openDetail}
+            onReplay={() => setQmDeck(qmAvailable)}
+            onClose={closeQuickMatch}
+          />
+        )}
+
         {venue && (
           <VenuePage
             key={venue.id}
@@ -950,7 +1022,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         <Toast text={toast} />
       </div>
 
-      {!detail && !venue && !search && profileUi?.kind !== "flow" && !primerOpen && (
+      {!detail && !venue && !qmDeck && !search && profileUi?.kind !== "flow" && !primerOpen && (
         <nav className="grid flex-none grid-cols-3 border-t border-line bg-white px-2 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
           {tabs.map(([id, name]) => {
             const on = screen === id;

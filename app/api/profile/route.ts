@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isCategoryId, MAX_CATEGORIES } from "@/lib/categories";
 import { isAgeRange, isGender, TOP_CITIES } from "@/lib/profile";
 import { supabaseAdmin } from "@/lib/supabase";
+import { isTasteScores } from "@/lib/taste";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -19,7 +20,8 @@ export async function POST(req: NextRequest) {
     (b.gender === null || isGender(b.gender)) &&
     Array.isArray(b.topCities) &&
     b.topCities.length <= TOP_CITIES &&
-    b.topCities.every((s: unknown) => typeof s === "string" && s.length <= 60);
+    b.topCities.every((s: unknown) => typeof s === "string" && s.length <= 60) &&
+    (b.taste === undefined || isTasteScores(b.taste));
   if (!valid) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   const sb = supabaseAdmin();
@@ -30,17 +32,18 @@ export async function POST(req: NextRequest) {
     cities = (b.topCities as string[]).filter((s) => known.has(s));
   }
 
-  const { error } = await sb.from("user_profiles").upsert(
-    {
-      device_id: b.deviceId,
-      categories: b.categories,
-      age_range: b.ageRange,
-      gender: b.gender,
-      top_cities: cities,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "device_id" },
-  );
+  const row = {
+    device_id: b.deviceId,
+    categories: b.categories,
+    age_range: b.ageRange,
+    gender: b.gender,
+    top_cities: cities,
+    updated_at: new Date().toISOString(),
+  };
+  const table = sb.from("user_profiles");
+  let { error } = await table.upsert({ ...row, taste: b.taste ?? {} }, { onConflict: "device_id" });
+  // Colonne `taste` absente (migration 0007 non appliquée) : le reste du profil est enregistré.
+  if (error?.code === "PGRST204") ({ error } = await table.upsert(row, { onConflict: "device_id" }));
   if (error) return NextResponse.json({ error: "db" }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -185,7 +185,22 @@
     "howWeChoose": "Comment on choisit ?",
     "howWeChooseTitle": "Comment on choisit ?",
     "howWeChooseText": "Artwhere rassemble les agendas officiels des lieux et des villes. On retire les événements passés et on fusionne les doublons. L'ordre des rangées suit ce que tu gardes en favori.",
-    "gotIt": "J'ai compris"
+    "gotIt": "J'ai compris",
+    "quickMatchTitle": "Quick Match",
+    "quickMatchText": "{count} événements à {city}. Garde ou passe, on apprend tes goûts.",
+    "quickMatchCta": "Jouer"
+  },
+  "qm": {
+    "title": "Quick Match",
+    "counter": "{i} sur {n} · on apprend tes goûts",
+    "done": "Série terminée",
+    "keep": "Garder",
+    "pass": "Passer",
+    "doneTitle": "Tes goûts se dessinent",
+    "doneText": "On met ces thèmes en avant dans Explorer. Tu peux rejouer quand tu veux.",
+    "noneKept": "Rien gardé pour l'instant",
+    "replay": "Rejouer",
+    "close": "Fermer"
   },
   "venue": {
     "upcoming": "{count, plural, =0 {Aucune date à venir} one {1 date à venir} other {# dates à venir}}",
@@ -303,13 +318,13 @@
     "back": "← Retour à Artwhere",
     "intro": "Artwhere fonctionne sans compte. Tes favoris, tes recherches et tes préférences restent sur ton appareil.",
     "whatTitle": "Ce qui est enregistré, seulement si tu l'acceptes",
-    "what": "Si tu coches la case « J'accepte… », Artwhere enregistre sur son serveur : tes centres d'intérêt, ta tranche d'âge et ton genre (si tu les indiques), et les trois villes que tu consultes le plus. Ces informations sont liées à un identifiant aléatoire créé par ton appareil, jamais à ton nom, ton email ou ton numéro.",
+    "what": "Si tu coches la case « J'accepte… », Artwhere enregistre sur son serveur : tes centres d'intérêt (les catégories choisies et, si tu utilises Quick Match ou les favoris, un score par catégorie, sans la liste des événements), ta tranche d'âge et ton genre (si tu les indiques), et les trois villes que tu consultes le plus. Ces informations sont liées à un identifiant aléatoire créé par ton appareil, jamais à ton nom, ton email ou ton numéro.",
     "whyTitle": "Pourquoi",
     "why": "Pour mesurer quels publics utilisent Artwhere et quels événements leur manquent, sous forme de statistiques globales.",
     "keepTitle": "Durée et effacement",
     "keep": "Les données sont conservées jusqu'à ce que tu retires ton accord. Pour les effacer : onglet Alertes › Mes données › « Retirer mon accord et effacer mes données ». L'effacement est immédiat.",
     "alertsTitle": "Alertes",
-    "alerts": "Si tu actives les alertes, ton abonnement aux notifications et ta recherche (ville, dates, catégories) sont enregistrés pour pouvoir t'envoyer les notifications. Désactiver les alertes les supprime.",
+    "alerts": "Si tu actives les alertes, ton abonnement aux notifications ta recherche (ville, dates, catégories) et les lieux que tu suis sont enregistrés pour pouvoir t'envoyer les notifications. Désactiver les alertes les supprime.",
     "contact": "Contact : {email}"
   },
   "install": {

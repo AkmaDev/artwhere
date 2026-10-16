@@ -74,3 +74,10 @@ a:hover {
     opacity: 0;
   }
 }
+
+/* Quick Match : la carte suivante passe dessus. */
+@keyframes qm-rise {
+  from {
+    transform: scale(0.96) translateY(10px);
+  }
+}

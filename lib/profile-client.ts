@@ -8,6 +8,8 @@ export interface ProfilePayload {
   ageRange: AgeRange | null;
   gender: Gender | null;
   topCities: string[];
+  /** Scores de goût agrégés par catégorie (lib/taste.ts), jamais la liste des événements vus. */
+  taste?: Record<string, number>;
 }
 
 /** À n'appeler que si l'utilisateur a donné son accord. */
