@@ -66,3 +66,11 @@ a:hover {
 .maplibregl-ctrl-attrib {
   font-size: 10px;
 }
+
+/* Apparition des feuilles du bas (désactivée si prefers-reduced-motion via motion-safe:). */
+@keyframes sheet-in {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}

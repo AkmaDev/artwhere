@@ -18,7 +18,17 @@ import {
 import { firstDay } from "@/lib/format";
 import { CATEGORY_IDS, type CategoryId } from "@/lib/categories";
 import { placeLabel } from "@/lib/neighborhood";
-import { DEFAULT_PROFILE, topCities, type AgeRange, type Gender, type Profile } from "@/lib/profile";
+import {
+  DEFAULT_PROFILE,
+  DEFAULT_PROFILE_PROMPT,
+  deferInvite,
+  shouldInvite,
+  topCities,
+  type AgeRange,
+  type Gender,
+  type Profile,
+  type ProfilePrompt,
+} from "@/lib/profile";
 import { deleteProfile, sendProfile } from "@/lib/profile-client";
 import { disablePush, enablePush, updatePush, type Criteria } from "@/lib/push-client";
 import { matchesShortcut, SHORTCUT_IDS, type ShortcutId } from "@/lib/shortcuts";
@@ -34,7 +44,8 @@ import { FreshnessFooter } from "./FreshnessFooter";
 import { InfoSheet } from "./InfoSheet";
 import { InstallSheet } from "./InstallSheet";
 import { Onboarding } from "./Onboarding";
-import { ProfileSheet } from "./ProfileSheet";
+import { ProfileFlow } from "./profile/ProfileFlow";
+import { ProfileInvite } from "./profile/ProfileInvite";
 import { SearchSheet, type Step } from "./SearchSheet";
 import { ShortcutPills, type ShortcutItem } from "./ShortcutPills";
 import { Toast } from "./ui";
@@ -42,7 +53,8 @@ import { Toast } from "./ui";
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
 type Screen = "explore" | "favs" | "alerts";
-type HomeFilter = { kind: "shortcut"; id: ShortcutId } | { kind: "cat"; id: CategoryId } | { kind: "urgent" };
+type ProfileUi = { kind: "invite"; variant: "invite" | "edit" } | { kind: "flow"; editing: boolean };
+type HomeFilter ={ kind: "shortcut"; id: ShortcutId } | { kind: "cat"; id: CategoryId } | { kind: "urgent" };
 const PAGE = 30;
 const ONGOING_PREVIEW = 4;
 const AREA_POLL_MS = 15000;
@@ -61,7 +73,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const [recent, setRecent] = useStored<Area[]>("recentAreas", []);
   const [areaCounts, setAreaCounts] = useStored<Record<string, number>>("areaCounts", {});
   const [profile, setProfile, profileReady] = useStored<Profile>("profile", DEFAULT_PROFILE);
-  const [profileSheet, setProfileSheet] = useState<"ask" | "edit" | null>(null);
+  const [prompt, setPrompt, promptReady] = useStored<ProfilePrompt>("profilePrompt", DEFAULT_PROFILE_PROMPT);
+  const [profileUi, setProfileUi] = useState<ProfileUi | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [areaBusy, setAreaBusy] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
@@ -282,26 +295,31 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       else next[e.id] = e;
       return next;
     });
-    if (!had) {
-      flash(t("toast.favAdded"));
-      if (profileReady && !profile.asked) setProfileSheet("ask");
-    }
+    if (had) return;
+    // 1er favori (puis une fois au 3e après « Plus tard ») : l'invitation au profil remplace le toast.
+    const count = favIds.length + 1;
+    if (profileReady && promptReady && shouldInvite(prompt, profile, count)) setProfileUi({ kind: "invite", variant: "invite" });
+    else flash(t("toast.favAdded"));
   };
 
-  const saveProfile = async (ageRange: AgeRange | null, gender: Gender | null) => {
+  // « Plus tard » sur l'invitation, ou « × » avant d'avoir répondu : reproposé une seule fois, au 3e favori.
+  const deferProfile = () => {
+    if (profileUi?.kind === "invite" ? profileUi.variant === "invite" : profileUi?.kind === "flow" && !profileUi.editing) {
+      setPrompt((p) => deferInvite(p, favIds.length));
+    }
+    setProfileUi(null);
+  };
+
+  const finishProfile = async (ageRange: AgeRange | null, gender: Gender | null) => {
     setProfileBusy(true);
     const ok = await sendProfile({ categories: prefs.cats, ageRange, gender, topCities: cities });
     setProfileBusy(false);
     if (!ok) return flash(t("profile.failed"));
     lastProfile.current = JSON.stringify([prefs.cats, ageRange, gender, cities]);
-    setProfile({ asked: true, consent: true, ageRange, gender });
-    setProfileSheet(null);
-    flash(t("profile.saved"));
-  };
-
-  const closeProfile = () => {
-    setProfile((p) => ({ ...p, asked: true }));
-    setProfileSheet(null);
+    setProfile({ consent: true, ageRange, gender, answeredAt: new Date().toISOString() });
+    setPrompt((p) => ({ ...p, done: true }));
+    setProfileUi(null);
+    flash(t("profile.thanks"));
   };
 
   const withdrawProfile = async () => {
@@ -309,10 +327,14 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     const ok = await deleteProfile();
     setProfileBusy(false);
     if (!ok) return flash(t("profile.failed"));
-    setProfile({ asked: true, consent: false, ageRange: null, gender: null });
-    setProfileSheet(null);
+    setProfile(DEFAULT_PROFILE);
+    setPrompt((p) => ({ ...p, done: true }));
+    setProfileUi(null);
     flash(t("profile.withdrawn"));
   };
+
+  // Mes données : directement l'âge si l'accord est déjà donné, sinon l'invitation (consentement d'abord).
+  const openMyData = () => setProfileUi(profile.consent ? { kind: "flow", editing: true } : { kind: "invite", variant: "edit" });
 
   // Codes GeolocationPositionError : 1 refusée, 2 indisponible, 3 délai dépassé.
   const geoError = (code: number) =>
@@ -758,7 +780,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             onToggle={toggleAlerts}
             onFreq={(freq) => setAlerts({ ...alerts, freq })}
             onHowTo={() => setSheet(true)}
-            onMyData={() => setProfileSheet("edit")}
+            onMyData={openMyData}
           />
         )}
 
@@ -805,20 +827,28 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         {howOpen && (
           <InfoSheet title={t("home.howWeChooseTitle")} text={t("home.howWeChooseText")} ok={t("home.gotIt")} onClose={() => setHowOpen(false)} />
         )}
-        {profileSheet && (
-          <ProfileSheet
-            mode={profileSheet}
-            profile={profile}
+        {profileUi?.kind === "invite" && (
+          <ProfileInvite
+            variant={profileUi.variant}
+            onLater={deferProfile}
+            onStart={() => setProfileUi({ kind: "flow", editing: profileUi.variant === "edit" })}
+          />
+        )}
+        {profileUi?.kind === "flow" && (
+          <ProfileFlow
+            initialAge={profile.ageRange}
+            initialGender={profile.gender}
             busy={profileBusy}
-            onSave={saveProfile}
-            onClose={closeProfile}
+            editing={profileUi.editing && profile.consent}
+            onClose={deferProfile}
+            onFinish={finishProfile}
             onWithdraw={withdrawProfile}
           />
         )}
         <Toast text={toast} />
       </div>
 
-      {!detail && !search && (
+      {!detail && !search && profileUi?.kind !== "flow" && (
         <nav className="grid flex-none grid-cols-3 border-t border-line bg-white px-2 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
           {tabs.map(([id, name]) => {
             const on = screen === id;

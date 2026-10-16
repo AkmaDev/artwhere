@@ -7,14 +7,36 @@ export type AgeRange = (typeof AGE_RANGES)[number];
 export type Gender = (typeof GENDERS)[number];
 
 export interface Profile {
-  /** La feuille de profil a déjà été proposée (on ne la repropose pas). */
-  asked: boolean;
   consent: boolean;
   ageRange: AgeRange | null;
   gender: Gender | null;
+  /** Parcours âge + genre terminé (« Je préfère ne pas répondre » compte) : on ne réinvite plus. */
+  answeredAt: string | null;
 }
 
-export const DEFAULT_PROFILE: Profile = { asked: false, consent: false, ageRange: null, gender: null };
+export const DEFAULT_PROFILE: Profile = { consent: false, ageRange: null, gender: null, answeredAt: null };
+
+/** Invitation au profil : au 1er favori, puis une seule fois au 3e après « Plus tard ». */
+export interface ProfilePrompt {
+  shown: number;
+  lastShownAtFavCount: number;
+  done: boolean;
+}
+
+export const DEFAULT_PROFILE_PROMPT: ProfilePrompt = { shown: 0, lastShownAtFavCount: 0, done: false };
+export const REINVITE_AT = 3;
+
+export function shouldInvite(prompt: ProfilePrompt, profile: Profile, favCount: number): boolean {
+  if (profile.answeredAt || prompt.done) return false;
+  if (prompt.shown === 0) return favCount >= 1;
+  return prompt.shown === 1 && favCount >= REINVITE_AT && prompt.lastShownAtFavCount < REINVITE_AT;
+}
+
+/** « Plus tard » ou fermeture sans réponse. */
+export function deferInvite(prompt: ProfilePrompt, favCount: number): ProfilePrompt {
+  const shown = prompt.shown + 1;
+  return { shown, lastShownAtFavCount: favCount, done: shown >= 2 };
+}
 
 export const isAgeRange = (v: unknown): v is AgeRange => (AGE_RANGES as readonly unknown[]).includes(v);
 export const isGender = (v: unknown): v is Gender => (GENDERS as readonly unknown[]).includes(v);
