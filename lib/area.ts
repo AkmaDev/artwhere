@@ -7,6 +7,8 @@ export interface Area {
   timezone: string;
   currency: string;
   status: "pending" | "ready";
+  /** Dernière collecte réussie (pied de liste « mise à jour il y a… »). */
+  lastIngestedAt?: string | null;
 }
 
 export interface Place {
@@ -16,6 +18,9 @@ export interface Place {
   region: string | null;
   lat: number;
   lng: number;
+  /** Renseignés par le géocodage inverse (position de l'utilisateur). */
+  district?: string | null;
+  postcode?: string | null;
 }
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {

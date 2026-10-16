@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getUrgency } from "./urgency";
+import { getUrgency, isLastChance } from "./urgency";
 
 const TZ = "Europe/Paris";
 // Jeudi 15 octobre 2026, 10h à Paris (UTC+2).
@@ -64,4 +64,11 @@ test("fin à minuit pile = fin la veille", () => {
 test("événement passé ou lieu : jamais", () => {
   assert.equal(getUrgency(ev({ endAt: "2026-10-14T20:00:00Z", startAt: "2026-10-14T18:00:00Z" }), NOW), null);
   assert.equal(getUrgency(ev({ kind: "place" }), NOW), null);
+});
+
+test("dernière chance : pas un simple « ce soir », oui avec dernières places", () => {
+  assert.equal(isLastChance({ key: "tonight" }), false);
+  assert.equal(isLastChance({ key: "tonight", lastSeats: true }), true);
+  assert.equal(isLastChance({ key: "endsTomorrow" }), true);
+  assert.equal(isLastChance(null), false);
 });

@@ -79,7 +79,8 @@ export interface Prefs {
   onboarded: boolean;
   cats: CategoryId[];
   area: Area | null;
-  geo: { lat: number; lng: number } | null;
+  /** Position de l'utilisateur ; district et code postal viennent du géocodage inverse. */
+  geo: { lat: number; lng: number; district?: string | null; postcode?: string | null } | null;
   from: string | null;
   to: string | null;
   moments: Moment[];

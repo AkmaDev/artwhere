@@ -17,6 +17,9 @@ interface Feature {
     countrycode?: string;
     type?: string;
     osm_value?: string;
+    district?: string;
+    locality?: string;
+    postcode?: string;
   };
 }
 
@@ -55,5 +58,8 @@ export async function reversePlace(lat: number, lng: number, lang: string): Prom
   const body = (await res.json()) as { features: Feature[] };
   const f = body.features[0];
   const place = f ? toPlace(f, true) : null;
-  return place ? { ...place, lat, lng } : null;
+  if (!place) return null;
+  // Quartier vécu (ex. « Le Marais ») et code postal, pour le libellé de la position.
+  const p = f.properties;
+  return { ...place, lat, lng, district: p.district ?? p.locality ?? null, postcode: p.postcode ?? null };
 }

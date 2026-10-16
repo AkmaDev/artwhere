@@ -34,6 +34,14 @@ export function getUrgency(e: UrgencyInput, now = new Date()): Urgency {
   return null;
 }
 
+/**
+ * « Dernière chance » : ce qui se termine ou va être complet. Un simple « ce soir » n'y entre pas
+ * (sinon les concerts du soir remplissent la rangée) : il reste visible par son badge et « Aujourd'hui ».
+ */
+export function isLastChance(u: Urgency): boolean {
+  return !!u && !(u.key === "tonight" && !u.lastSeats);
+}
+
 /** Date de fin utilisée pour trier « Dernière chance ». */
 export function urgencyEnd(e: Pick<EventItem, "endAt">): number {
   return new Date(e.endAt).getTime();

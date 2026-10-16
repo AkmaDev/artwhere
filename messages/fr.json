@@ -170,6 +170,23 @@
     "endsTomorrow": "Se termine demain",
     "daysLeft": "Plus que {days} jours"
   },
+  "shortcuts": {
+    "today": "Aujourd'hui",
+    "weekend": "Ce week-end",
+    "new": "Nouveautés",
+    "free": "Gratuit"
+  },
+  "home": {
+    "endingSoon": "Dernière chance",
+    "seeAllShort": "Tout voir ›",
+    "seeAll": "Voir les {count} ›",
+    "clearFilter": "{label} ×",
+    "freshness": "Liste mise à jour {ago} · {count, plural, one {1 source} other {# sources}}",
+    "howWeChoose": "Comment on choisit ?",
+    "howWeChooseTitle": "Comment on choisit ?",
+    "howWeChooseText": "Artwhere rassemble les agendas officiels des lieux et des villes. On retire les événements passés et on fusionne les doublons. L'ordre des rangées suit ce que tu gardes en favori.",
+    "gotIt": "J'ai compris"
+  },
   "venue": {
     "upcoming": "{count, plural, =0 {Aucune date à venir} one {1 date à venir} other {# dates à venir}}",
     "follow": "Suivre",

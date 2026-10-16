@@ -6,18 +6,26 @@ import { supabaseAdmin } from "./supabase";
 
 const DEFAULT_RADIUS_KM = 25;
 
-type Row = { slug: string; name: string; country: string; timezone: string; currency: string; status: Area["status"] };
+type Row = {
+  slug: string;
+  name: string;
+  country: string;
+  timezone: string;
+  currency: string;
+  status: Area["status"];
+  last_ingested_at: string | null;
+};
 
-async function withCoords(r: Row): Promise<Area> {
+async function withCoords({ last_ingested_at, ...r }: Row): Promise<Area> {
   const { data } = await supabaseAdmin().rpc("city_coords", { p_slug: r.slug });
   const c = (data as { lat: number; lng: number }[] | null)?.[0];
-  return { ...r, lat: c?.lat ?? 0, lng: c?.lng ?? 0 };
+  return { ...r, lat: c?.lat ?? 0, lng: c?.lng ?? 0, lastIngestedAt: last_ingested_at };
 }
 
 export async function getArea(slug: string): Promise<Area | null> {
   const { data, error } = await supabaseAdmin()
     .from("cities")
-    .select("slug, name, country, timezone, currency, status")
+    .select("slug, name, country, timezone, currency, status, last_ingested_at")
     .eq("slug", slug)
     .maybeSingle<Row>();
   if (error) throw error;

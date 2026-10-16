@@ -16,23 +16,33 @@ import {
   type Prefs,
 } from "@/lib/device";
 import { firstDay } from "@/lib/format";
+import { CATEGORY_IDS, type CategoryId } from "@/lib/categories";
+import { placeLabel } from "@/lib/neighborhood";
 import { DEFAULT_PROFILE, topCities, type AgeRange, type Gender, type Profile } from "@/lib/profile";
 import { deleteProfile, sendProfile } from "@/lib/profile-client";
 import { disablePush, enablePush, updatePush, type Criteria } from "@/lib/push-client";
+import { matchesShortcut, SHORTCUT_IDS, type ShortcutId } from "@/lib/shortcuts";
 import type { EventItem } from "@/lib/types";
+import { getUrgency, isLastChance, urgencyEnd } from "@/lib/urgency";
 import { Alerts } from "./Alerts";
+import { CategoryRow } from "./CategoryRow";
+import { EndingSoonRow } from "./EndingSoonRow";
 import { EventCard } from "./EventCard";
 import { EventDetail } from "./EventDetail";
 import { Favorites } from "./Favorites";
+import { FreshnessFooter } from "./FreshnessFooter";
+import { InfoSheet } from "./InfoSheet";
 import { InstallSheet } from "./InstallSheet";
 import { Onboarding } from "./Onboarding";
 import { ProfileSheet } from "./ProfileSheet";
 import { SearchSheet, type Step } from "./SearchSheet";
-import { Pill, Toast } from "./ui";
+import { ShortcutPills, type ShortcutItem } from "./ShortcutPills";
+import { Toast } from "./ui";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
 type Screen = "explore" | "favs" | "alerts";
+type HomeFilter = { kind: "shortcut"; id: ShortcutId } | { kind: "cat"; id: CategoryId } | { kind: "urgent" };
 const PAGE = 30;
 const ONGOING_PREVIEW = 4;
 const AREA_POLL_MS = 15000;
@@ -61,7 +71,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const [step, setStep] = useState<Step>("when");
   const [view, setView] = useState<"list" | "map">("list");
   const [tab, setTab] = useState<string>("all");
-  const [free, setFree] = useState(false);
+  // Accueil éditorialisé : sans filtre ; avec un raccourci, une catégorie ou « Dernière chance » : liste par jour filtrée.
+  const [filter, setFilter] = useState<HomeFilter | null>(null);
+  const [howOpen, setHowOpen] = useState(false);
   const [near, setNear] = useState(false);
   const [detail, setDetail] = useState<EventItem | null>(null);
   const [sheet, setSheet] = useState(false);
@@ -154,20 +166,31 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     if (!ready || !today || !prefs.cats.length || !area) return null;
     const p = new URLSearchParams({ city: area.slug, from, to, cats: prefs.cats.join(",") });
     if (prefs.moments.length) p.set("moments", prefs.moments.join(","));
-    if (free) p.set("free", "1");
     if (prefs.geo) {
       p.set("lat", String(prefs.geo.lat));
       p.set("lng", String(prefs.geo.lng));
       if (near) p.set("maxKm", "2");
     }
     return p.toString();
-  }, [ready, today, area, prefs.cats, prefs.moments, prefs.geo, from, to, free, near]);
+  }, [ready, today, area, prefs.cats, prefs.moments, prefs.geo, from, to, near]);
 
   useEffect(() => {
     setRenderLimit(PAGE);
     setOngoingOpen(false);
     setPlacesOpen(false);
-  }, [queryKey, tab]);
+  }, [queryKey, tab, filter]);
+
+  // Date de dernière collecte (pied de liste) : la zone stockée sur l'appareil peut être ancienne.
+  const areaSlug = area?.slug;
+  useEffect(() => {
+    if (!areaSlug) return;
+    fetch(`/api/areas/${areaSlug}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { area: Area } | null) => {
+        if (d) setPrefsRaw((prev) => (prev.area?.slug === d.area.slug ? { ...prev, area: d.area } : prev));
+      })
+      .catch(() => {});
+  }, [areaSlug, setPrefsRaw]);
 
   useEffect(() => {
     if (!queryKey) {
@@ -313,14 +336,14 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     attempt(false);
   };
 
-  const chooseArea = (a: Area, geo: { lat: number; lng: number } | null = null) => {
+  const chooseArea = (a: Area, geo: Prefs["geo"] = null) => {
     setPrefs({ area: a, geo });
     setRecent((prev) => [a, ...prev.filter((x) => x.slug !== a.slug)].slice(0, 5));
     setAreaCounts((prev) => ({ ...prev, [a.slug]: (prev[a.slug] ?? 0) + 1 }));
     setStep("when");
   };
 
-  const pickPlace = async (p: Place, geo: { lat: number; lng: number } | null = null) => {
+  const pickPlace = async (p: Place, geo: Prefs["geo"] = null) => {
     setAreaBusy(true);
     try {
       const r = await fetch("/api/areas/resolve", {
@@ -337,12 +360,19 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     }
   };
 
+  // Position + quartier (pour le titre « Paris · Le Marais, 4e »), sans bloquer si le géocodage échoue.
+  const geoWithLabel = async (lat: number, lng: number): Promise<NonNullable<Prefs["geo"]>> => {
+    const r = await fetch(`/api/geo/reverse?lat=${lat}&lng=${lng}`).catch(() => null);
+    const place = r?.ok ? ((await r.json()) as { place: Place }).place : null;
+    return { lat, lng, district: place?.district ?? null, postcode: place?.postcode ?? null };
+  };
+
   const onGeo = () =>
     requestGeo(async (lat, lng) => {
       const r = await fetch(`/api/geo/reverse?lat=${lat}&lng=${lng}`).catch(() => null);
       const place = r?.ok ? ((await r.json()) as { place: Place }).place : null;
       if (!place) return flash(t("search.geoFailed"));
-      await pickPlace(place, { lat, lng });
+      await pickPlace(place, { lat, lng, district: place.district ?? null, postcode: place.postcode ?? null });
       flash(t("search.geoFound"));
     });
 
@@ -365,7 +395,18 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   }
 
   const all = events ?? [];
-  const shown = tab === "all" ? all : all.filter((e) => e.categories.includes(tab as never));
+  const allEvs = all.filter((e) => e.kind === "event");
+  const matchFilter = (e: EventItem): boolean =>
+    !filter
+      ? true
+      : filter.kind === "cat"
+        ? e.categories.includes(filter.id)
+        : filter.kind === "urgent"
+          ? e.kind === "event" && isLastChance(getUrgency(e))
+          : e.kind === "event" && matchesShortcut(filter.id, e, { today, isNew: isNew(e) });
+  // Carte : onglets de catégorie existants. Liste : accueil éditorialisé, ou liste par jour filtrée.
+  const shown = view === "map" ? (tab === "all" ? all : all.filter((e) => e.categories.includes(tab as never))) : all.filter(matchFilter);
+  const editorial = view === "list" && !filter;
   const evs = shown.filter((e) => e.kind === "event");
   const places = shown.filter((e) => e.kind === "place");
   const ongoing = evs.filter((e) => e.allDay);
@@ -395,7 +436,45 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const n = prefs.cats.length;
   const momTxt = prefs.moments.map((m) => t(`moments.${m}.name`)).join(", ");
   const range = fmtRange(from, to, locale);
-  const pillTitle = `${area?.name ?? t("search.chooseCity")}${prefs.geo ? ` · ${t("explore.aroundMe")}` : ""}`;
+  const geoLabel = placeLabel(prefs.geo);
+  const pillTitle = `${area?.name ?? t("search.chooseCity")}${prefs.geo ? ` · ${geoLabel ?? t("explore.aroundMe")}` : ""}`;
+
+  // Accueil éditorialisé.
+  const todayInRange = from <= today && today <= to;
+  const toggleNear = () => {
+    if (near) return setNear(false);
+    if (prefs.geo) return setNear(true);
+    requestGeo(async (lat, lng) => {
+      setPrefs({ geo: await geoWithLabel(lat, lng) });
+      setNear(true);
+      flash(t("search.geoFound"));
+    });
+  };
+  const filterLabel = filter?.kind === "cat" ? t(`categories.${filter.id}.name`) : filter?.kind === "urgent" ? t("home.endingSoon") : null;
+  const shortcutItems: ShortcutItem[] = [
+    ...(filterLabel ? [{ id: "clear", label: t("home.clearFilter", { label: filterLabel }), on: true, onClick: () => setFilter(null) }] : []),
+    ...SHORTCUT_IDS.filter((id) => id !== "today" || todayInRange)
+      .map((id) => ({
+        id,
+        label: t(`shortcuts.${id}`),
+        count: allEvs.filter((e) => matchesShortcut(id, e, { today, isNew: isNew(e) })).length,
+        on: filter?.kind === "shortcut" && filter.id === id,
+        onClick: () => setFilter(filter?.kind === "shortcut" && filter.id === id ? null : { kind: "shortcut", id }),
+      }))
+      .filter((x) => x.count > 0 || x.on),
+    { id: "near", label: t("explore.near"), on: near, onClick: toggleNear },
+  ];
+  const endingSoon = allEvs
+    .filter((e) => isLastChance(getUrgency(e)))
+    .sort((a, b) => urgencyEnd(a) - urgencyEnd(b))
+    .slice(0, 10);
+  // Ordre des rangées : catégories les plus mises en favori, puis les plus fournies.
+  const favByCat: Record<string, number> = {};
+  for (const f of Object.values(favs)) for (const c of f.categories) favByCat[c] = (favByCat[c] ?? 0) + 1;
+  const rows = (prefs.cats.length ? prefs.cats : [...CATEGORY_IDS])
+    .map((cat) => ({ cat, events: allEvs.filter((e) => e.categories.includes(cat)).sort((a, b) => a.nextAt.localeCompare(b.nextAt)) }))
+    .filter((r) => r.events.length)
+    .sort((a, b) => (favByCat[b.cat] ?? 0) - (favByCat[a.cat] ?? 0) || b.events.length - a.events.length);
   const pillSub = `${range} · ${momTxt || t("moments.allDay")} · ${t("explore.catCount", { n })}`;
   const sourceNames = [...new Set(all.flatMap((e) => e.sources))].map((s) => (t.has(`sources.${s}`) ? t(`sources.${s}`) : s));
   const showBanner = !standalone && !bannerHidden && (ios || !!installEvt);
@@ -460,7 +539,12 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                   {t("explore.edit")}
                 </span>
               </button>
-              <div className="no-scrollbar -mx-4 flex gap-[22px] overflow-x-auto px-4">
+              {view === "list" && (
+                <div className="pb-3">
+                  <ShortcutPills items={shortcutItems} />
+                </div>
+              )}
+              <div className={`no-scrollbar -mx-4 gap-[22px] overflow-x-auto px-4 ${view === "map" ? "flex" : "hidden"}`}>
                 {[{ id: "all", name: t("explore.all") }, ...prefs.cats.map((c) => ({ id: c, name: t(`categories.${c}.name`) }))].map((x) => {
                   const on = tab === x.id;
                   return (
@@ -505,31 +589,13 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                     </button>
                   </div>
                 )}
-                <div className="flex items-center justify-between gap-2.5 pt-4 pb-0.5">
-                  <span className="text-[14px] leading-[1.3] font-semibold">
-                    {events == null ? t("explore.loading") : t("explore.results", { n: evs.length })}
-                  </span>
-                  <div className="flex gap-1.5">
-                    <Pill on={free} onClick={() => setFree(!free)} className="h-8 px-3 text-[13px] leading-none">
-                      {t("explore.free")}
-                    </Pill>
-                    <Pill
-                      on={near}
-                      onClick={() => {
-                        if (near) return setNear(false);
-                        if (prefs.geo) return setNear(true);
-                        requestGeo((lat, lng) => {
-                          setPrefs({ geo: { lat, lng } });
-                          setNear(true);
-                          flash(t("search.geoFound"));
-                        });
-                      }}
-                      className="h-8 px-3 text-[13px] leading-none"
-                    >
-                      {t("explore.near")}
-                    </Pill>
+                {(events == null || !editorial) && (
+                  <div className="pt-4 pb-0.5">
+                    <span className="text-[14px] leading-[1.3] font-semibold">
+                      {events == null ? t("explore.loading") : t("explore.results", { n: evs.length })}
+                    </span>
                   </div>
-                </div>
+                )}
                 {area?.status === "pending" && (
                   <div className="mt-3.5 flex flex-col gap-1 rounded-[14px] bg-accent-soft px-3.5 py-3">
                     <span className="text-[14px] leading-[1.3] font-semibold text-ink">{t("explore.preparingTitle", { city: area.name })}</span>
@@ -539,7 +605,29 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                 {events != null && !error && evs.length === 0 && places.length > 0 && (
                   <span className="block pt-2 text-[13px] leading-[1.4] text-muted">{t("explore.fewEvents")}</span>
                 )}
-                {newN > 0 && <span className="block pt-1 text-[13px] leading-[1.3] font-medium text-accent">{t("explore.newSince", { n: newN })}</span>}
+                {!editorial && newN > 0 && (
+                  <span className="block pt-1 text-[13px] leading-[1.3] font-medium text-accent">{t("explore.newSince", { n: newN })}</span>
+                )}
+
+                {editorial && events != null && !error && (endingSoon.length >= 2 || rows.length > 0) && (
+                  <div className="flex flex-col gap-6 pt-4">
+                    {endingSoon.length >= 2 && (
+                      <EndingSoonRow events={endingSoon} isFav={isFav} onOpen={openDetail} onFav={toggleFav} onSeeAll={() => setFilter({ kind: "urgent" })} />
+                    )}
+                    {rows.map((r) => (
+                      <CategoryRow
+                        key={r.cat}
+                        cat={r.cat}
+                        events={r.events}
+                        from={from}
+                        isFav={isFav}
+                        onOpen={openDetail}
+                        onFav={toggleFav}
+                        onSeeAll={() => setFilter({ kind: "cat", id: r.cat })}
+                      />
+                    ))}
+                  </div>
+                )}
 
                 {error && (
                   <div className="flex flex-col items-center gap-2.5 px-2 py-12 text-center">
@@ -554,7 +642,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                   </div>
                 )}
 
-                {groups.map((g) => (
+                {(!editorial || rows.length === 0) && groups.map((g) => (
                   <section key={g.key}>
                     <div className="flex items-baseline justify-between pt-[22px] pb-3">
                       <h2 className="m-0 text-[18px] leading-[1.2] font-semibold tracking-[-.01em]">{g.label}</h2>
@@ -594,7 +682,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                     )}
                   </section>
                 ))}
-                {hasMore && <div ref={sentinel} className="h-px" />}
+                {(!editorial || rows.length === 0) && hasMore && <div ref={sentinel} className="h-px" />}
 
                 {events != null && !error && shown.length === 0 && area?.status !== "pending" && (
                   <div className="flex flex-col items-center gap-2.5 px-2 py-12 text-center">
@@ -605,7 +693,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                       onClick={() => {
                         const wk = shortcutRanges(today).find((r) => r.id === "week")!;
                         setPrefs({ from: wk.from, to: wk.to, moments: [] });
-                        setFree(false);
+                        setFilter(null);
                         setNear(false);
                         setTab("all");
                       }}
@@ -616,15 +704,21 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                   </div>
                 )}
 
-                <p className="m-0 mt-7 text-center text-[12px] leading-normal text-subtle">
-                  {t("explore.footer1")}
-                  {sourceNames.length > 0 && (
-                    <>
-                      <br />
-                      {t("explore.footer2", { sources: sourceNames.join(", ") })}
-                    </>
-                  )}
-                </p>
+                {editorial ? (
+                  <div className="mt-6">
+                    <FreshnessFooter lastIngestedAt={area?.lastIngestedAt ?? null} sources={sourceNames.length} onHow={() => setHowOpen(true)} />
+                  </div>
+                ) : (
+                  <p className="m-0 mt-7 text-center text-[12px] leading-normal text-subtle">
+                    {t("explore.footer1")}
+                    {sourceNames.length > 0 && (
+                      <>
+                        <br />
+                        {t("explore.footer2", { sources: sourceNames.join(", ") })}
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
             ) : (
               <MapView
@@ -708,6 +802,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         )}
 
         {sheet && <InstallSheet ios={ios} onClose={() => setSheet(false)} />}
+        {howOpen && (
+          <InfoSheet title={t("home.howWeChooseTitle")} text={t("home.howWeChooseText")} ok={t("home.gotIt")} onClose={() => setHowOpen(false)} />
+        )}
         {profileSheet && (
           <ProfileSheet
             mode={profileSheet}
