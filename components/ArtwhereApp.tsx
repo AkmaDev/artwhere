@@ -17,6 +17,7 @@ import {
 } from "@/lib/device";
 import { firstDay } from "@/lib/format";
 import { CATEGORY_IDS, type CategoryId } from "@/lib/categories";
+import { followKeys, useFollows } from "@/lib/follows";
 import { placeLabel } from "@/lib/neighborhood";
 import {
   DEFAULT_PROFILE,
@@ -34,6 +35,7 @@ import { disablePush, enablePush, notifPermission, updatePush, type Criteria, ty
 import { matchesShortcut, SHORTCUT_IDS, type ShortcutId } from "@/lib/shortcuts";
 import type { EventItem } from "@/lib/types";
 import { getUrgency, isLastChance, urgencyEnd } from "@/lib/urgency";
+import { venueId } from "@/lib/venue";
 import { Alerts } from "./Alerts";
 import { CategoryRow } from "./CategoryRow";
 import { EndingSoonRow } from "./EndingSoonRow";
@@ -50,6 +52,7 @@ import { ProfileInvite } from "./profile/ProfileInvite";
 import { SearchSheet, type Step } from "./SearchSheet";
 import { ShortcutPills, type ShortcutItem } from "./ShortcutPills";
 import { Toast } from "./ui";
+import { VenuePage } from "./VenuePage";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -71,6 +74,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const [prefs, setPrefsRaw, ready] = useStored<Prefs>("prefs", DEFAULT_PREFS);
   const [favs, setFavs] = useStored<FavMap>("favs", {});
   const [alerts, setAlerts] = useStored<AlertPrefs>("alerts", { on: false, freq: "now" });
+  // Lieux suivis : possédés ici (une seule instance de useStored) et passés aux écrans.
+  const { follows, ready: followsReady, isFollowing, toggleFollow } = useFollows();
+  const [venue, setVenue] = useState<{ id: string; name: string } | null>(null);
   const [bannerHidden, setBannerHidden] = useStored("bannerHidden", false);
   const [recent, setRecent] = useStored<Area[]>("recentAreas", []);
   const [areaCounts, setAreaCounts] = useStored<Record<string, number>>("areaCounts", {});
@@ -121,7 +127,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { events: EventItem[] } | null) => {
         const full = d?.events[0];
-        if (full) setDetail((cur) => (cur?.id === full.id ? { ...full, nextAt: cur.nextAt, distanceKm: cur.distanceKm } : cur));
+        if (full) setDetail((cur) => (cur?.id === full.id ? { ...full, nextAt: cur.nextAt, distanceKm: cur.distanceKm, city: full.city ?? cur.city } : cur));
       })
       .catch(() => {});
   }, []);
@@ -250,23 +256,20 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   }, [screen]);
 
   const criteria: Criteria = useMemo(
-    () => ({ city: area?.slug ?? "", from, to, cats: prefs.cats, moments: prefs.moments, frequency: alerts.freq }),
-    [area, from, to, prefs.cats, prefs.moments, alerts.freq],
+    () => ({ city: area?.slug ?? "", from, to, cats: prefs.cats, moments: prefs.moments, frequency: alerts.freq, venues: followKeys(follows) }),
+    [area, from, to, prefs.cats, prefs.moments, alerts.freq, follows],
   );
   const criteriaKey = JSON.stringify(criteria);
   const lastSent = useRef<string | null>(null);
   useEffect(() => {
-    if (!alerts.on || !today) return;
-    if (lastSent.current === null) {
-      lastSent.current = criteriaKey;
-      return;
-    }
+    // Renvoyé aussi une fois à l'ouverture : les lieux suivis ont pu changer ailleurs (lien partagé /l/[id]).
+    if (!alerts.on || !today || !followsReady) return;
     if (lastSent.current === criteriaKey) return;
     lastSent.current = criteriaKey;
     const timer = setTimeout(() => updatePush(criteria).catch(() => {}), 800);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alerts.on, criteriaKey, today]);
+  }, [alerts.on, criteriaKey, today, followsReady]);
 
   // Profil anonyme : synchronisé seulement après consentement, à chaque changement (et une fois par session).
   const cities = useMemo(() => topCities(areaCounts), [areaCounts]);
@@ -315,6 +318,13 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   };
   const maybePrime = () => {
     if (notifReady && !notifPrompt.seen && canPrime()) setTimeout(openPrimer, 400);
+  };
+
+  const toggleVenue = (id: string, name: string, city: string) => {
+    const now = toggleFollow(id, name, city);
+    flash(t(now ? "venuePage.toastFollow" : "venuePage.toastUnfollow", { venue: name }));
+    // Premier « Suivre » sans alertes : le pré-écran (une seule fois, si l'appareil peut les recevoir).
+    if (now && !alerts.on) maybePrime();
   };
 
   // « Plus tard » sur l'invitation, ou « × » avant d'avoir répondu : reproposé une seule fois, au 3e favori.
@@ -577,6 +587,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     setPrimerOpen(false);
   };
 
+  const detailVenue = detail && detail.kind === "event" ? venueId(detail.city, detail.venueName) : null;
+
   const tabs: [Screen, string][] = [
     ["explore", t("tabs.explore")],
     ["favs", t("tabs.favs")],
@@ -815,6 +827,12 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
 
         {screen === "alerts" && (
           <Alerts
+            venues={Object.entries(follows).map(([id, f]) => ({ id, name: f.name }))}
+            onOpenVenue={(id) => setVenue({ id, name: follows[id]?.name ?? "" })}
+            onRemoveVenue={(id) => {
+              const f = follows[id];
+              if (f) toggleVenue(id, f.name, f.city);
+            }}
             alerts={alerts}
             busy={alertBusy}
             title={pillTitle}
@@ -825,6 +843,31 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             onFreq={(freq) => setAlerts({ ...alerts, freq })}
             onHowTo={() => setSheet(true)}
             onMyData={openMyData}
+          />
+        )}
+
+        {venue && (
+          <VenuePage
+            key={venue.id}
+            id={venue.id}
+            name={venue.name}
+            from={from}
+            following={isFollowing(venue.id)}
+            alertsOn={alerts.on}
+            isFav={isFav}
+            onFav={toggleFav}
+            onOpenEvent={openDetail}
+            onFollow={() => {
+              const city = venue.id.split("--")[0];
+              toggleVenue(venue.id, follows[venue.id]?.name ?? venue.name, city);
+            }}
+            onAlerts={() => {
+              if (!alerts.on) return void toggleAlerts();
+              setDetail(null);
+              setVenue(null);
+              setScreen("alerts");
+            }}
+            onClose={() => setVenue(null)}
           />
         )}
 
@@ -841,6 +884,9 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                 ? events.filter((x) => x.kind === "event" && x.venueName?.toLowerCase() === detail.venueName!.toLowerCase()).length
                 : null
             }
+            onOpenVenue={detailVenue ? () => setVenue({ id: detailVenue, name: detail.venueName! }) : undefined}
+            venueFollowing={!!detailVenue && isFollowing(detailVenue)}
+            onFollowVenue={detailVenue ? () => toggleVenue(detailVenue, detail.venueName!, detail.city!) : undefined}
           />
         )}
 
@@ -893,7 +939,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
         <Toast text={toast} />
       </div>
 
-      {!detail && !search && profileUi?.kind !== "flow" && !primerOpen && (
+      {!detail && !venue && !search && profileUi?.kind !== "flow" && !primerOpen && (
         <nav className="grid flex-none grid-cols-3 border-t border-line bg-white px-2 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
           {tabs.map(([id, name]) => {
             const on = screen === id;

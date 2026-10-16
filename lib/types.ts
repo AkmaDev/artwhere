@@ -33,6 +33,25 @@ export interface EventItem {
   lastCheckedAt: string;
   sources: string[];
   distanceKm: number | null;
+  /** Ville (slug de zone) ; null si inconnue (get_events antérieur à la migration 0007). */
+  city?: string | null;
+}
+
+/** Réponse de /api/venues/[id] (page lieu). */
+export interface VenueData {
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    cityName: string;
+    address: string | null;
+    /** true si le lieu est référencé comme lieu culturel (ligne `place`). */
+    isPlace: boolean;
+    imageUrl: string | null;
+  };
+  events: EventItem[];
+  sources: string[];
+  lastIngestedAt: string | null;
 }
 
 export interface SearchQuery {

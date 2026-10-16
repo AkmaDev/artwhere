@@ -190,7 +190,29 @@
   "venue": {
     "upcoming": "{count, plural, =0 {Aucune date à venir} one {1 date à venir} other {# dates à venir}}",
     "follow": "Suivre",
-    "following": "Suivi ✓"
+    "following": "Suivi ✓",
+    "followName": "Suivre {venue}",
+    "unfollowName": "Ne plus suivre {venue}",
+    "open": "Voir la page de {venue}"
+  },
+  "venuePage": {
+    "back": "Retour",
+    "share": "Partager",
+    "place": "Lieu culturel",
+    "upcoming": "{count, plural, =0 {Aucun événement à venir} one {1 événement à venir} other {# événements à venir}}",
+    "followingInfo": "On te prévient quand {venue} publie un événement.",
+    "followingInfoOff": "Active les alertes pour être prévenu quand {venue} publie un événement.",
+    "manageAlerts": "Gérer dans Alertes",
+    "enableAlerts": "Activer les alertes",
+    "onStage": "À l'affiche",
+    "nothing": "Aucun événement à venir repéré pour l'instant.",
+    "source": "Programme récupéré sur {sources} · mis à jour {ago}",
+    "toastFollow": "Tu suis {venue}",
+    "toastUnfollow": "Tu ne suis plus {venue}",
+    "loading": "Chargement…",
+    "error": "Impossible de charger ce lieu.",
+    "retry": "Réessayer",
+    "notFound": "Ce lieu n'a plus d'événement à venir."
   },
   "favs": {
     "title": "Favoris",
@@ -220,7 +242,11 @@
     "failed": "Impossible d'activer les alertes. Réessaie.",
     "notConfigured": "Les alertes ne sont pas encore disponibles.",
     "myData": "Mes données",
-    "myDataHint": "Âge, genre, partage anonyme"
+    "myDataHint": "Âge, genre, partage anonyme",
+    "venuesTitle": "Lieux suivis",
+    "venueAlert": "Nouveaux événements à {venue}",
+    "venueAlertOff": "Active les alertes pour être prévenu.",
+    "removeVenue": "Ne plus suivre {venue}"
   },
   "notif": {
     "title": "Sois prévenu des nouveautés",

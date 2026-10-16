@@ -10,6 +10,8 @@ export interface Criteria {
   cats: string[];
   moments: Moment[];
   frequency: "now" | "daily";
+  /** Lieux suivis, clés « ville|venue_norm ». */
+  venues: string[];
 }
 
 export type PushResult = "ok" | "denied" | "unsupported" | "not-configured" | "failed";

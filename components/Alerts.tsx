@@ -14,9 +14,13 @@ interface Props {
   onFreq: (f: AlertPrefs["freq"]) => void;
   onHowTo: () => void;
   onMyData: () => void;
+  /** Lieux suivis : chacun est une alerte « Nouveaux événements à {lieu} ». */
+  venues: { id: string; name: string }[];
+  onOpenVenue: (id: string) => void;
+  onRemoveVenue: (id: string) => void;
 }
 
-export function Alerts({ alerts, busy, title, sub, notifText, showIosHint, onToggle, onFreq, onHowTo, onMyData }: Props) {
+export function Alerts({ alerts, busy, title, sub, notifText, showIosHint, onToggle, onFreq, onHowTo, onMyData, venues, onOpenVenue, onRemoveVenue }: Props) {
   const t = useTranslations("alerts");
   const ta = useTranslations("app");
   const freqs: [AlertPrefs["freq"], string, string][] = [
@@ -79,6 +83,33 @@ export function Alerts({ alerts, busy, title, sub, notifText, showIosHint, onTog
           </div>
         )}
       </div>
+      {venues.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-[13px] leading-none font-semibold text-muted">{t("venuesTitle")}</span>
+          <div className="flex flex-col rounded-2xl border border-border">
+            {venues.map((v, i) => (
+              <div key={v.id} className={`flex items-center gap-2 py-1 pr-1 pl-4 ${i ? "border-t border-line" : ""}`}>
+                <button
+                  type="button"
+                  onClick={() => onOpenVenue(v.id)}
+                  className="flex min-h-12 min-w-0 flex-1 cursor-pointer flex-col justify-center gap-0.5 border-0 bg-transparent p-0 text-left"
+                >
+                  <span className="truncate text-[14px] leading-tight font-semibold text-ink">{t("venueAlert", { venue: v.name })}</span>
+                  {!alerts.on && <span className="text-[12.5px] leading-tight text-muted">{t("venueAlertOff")}</span>}
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("removeVenue", { venue: v.name })}
+                  onClick={() => onRemoveVenue(v.id)}
+                  className="h-11 w-11 flex-none cursor-pointer border-0 bg-transparent text-[20px] leading-none text-muted"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <span className="text-[13px] leading-none font-semibold text-muted">{t("preview")}</span>
         <div className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-sand px-3.5 py-3">

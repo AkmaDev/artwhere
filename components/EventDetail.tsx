@@ -19,6 +19,10 @@ interface Props {
   flash: (s: string) => void;
   /** Nombre de dates à venir au même lieu parmi les événements chargés (inconnu sur une fiche partagée). */
   venueUpcoming?: number | null;
+  /** Page lieu et Suivre : seulement si la ville de l'événement est connue. */
+  onOpenVenue?: () => void;
+  venueFollowing?: boolean;
+  onFollowVenue?: () => void;
 }
 
 const CONTACT = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
@@ -30,7 +34,7 @@ function fullDate(day: string, locale: string): string {
   return s;
 }
 
-export function EventDetail({ e, isNew, isFav, onClose, onFav, flash, venueUpcoming = null }: Props) {
+export function EventDetail({ e, isNew, isFav, onClose, onFav, flash, venueUpcoming = null, onOpenVenue, venueFollowing = false, onFollowVenue }: Props) {
   const t = useTranslations("detail");
   const tc = useTranslations("card");
   const tcat = useTranslations("categories");
@@ -182,7 +186,9 @@ export function EventDetail({ e, isNew, isFav, onClose, onFav, flash, venueUpcom
               </span>,
             )}
           </div>
-          {!isPlace && e.venueName && <VenueBlock name={e.venueName} upcoming={venueUpcoming} />}
+          {!isPlace && e.venueName && (
+            <VenueBlock name={e.venueName} upcoming={venueUpcoming} onOpen={onOpenVenue} following={venueFollowing} onFollow={onFollowVenue} />
+          )}
           <p className={`m-0 text-[12px] leading-normal text-subtle ${isPlace ? "hidden" : ""}`}>
             {t("relay")}
             {CONTACT && (
