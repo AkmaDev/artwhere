@@ -222,6 +222,16 @@
     "myData": "Mes données",
     "myDataHint": "Âge, genre, partage anonyme"
   },
+  "notif": {
+    "title": "Sois prévenu des nouveautés",
+    "text": "On te prévient quand un nouvel événement correspond à ta recherche : la ville et les dates de ton séjour.",
+    "enable": "Activer les alertes",
+    "later": "Pas maintenant",
+    "now": "maintenant",
+    "yesterday": "hier",
+    "sample1": "3 nouveaux événements à {city} pendant ton séjour",
+    "sample2": "1 nouvel événement à {city} pendant ton séjour"
+  },
   "profile": {
     "ages": { "<18": "Moins de 18", "18-24": "18–24", "25-34": "25–34", "35-44": "35–44", "45-54": "45–54", "55-64": "55–64", "65+": "65 et +" },
     "genders": { "f": "Femme", "m": "Homme", "other": "Autre", "na": "Je préfère ne pas dire" },

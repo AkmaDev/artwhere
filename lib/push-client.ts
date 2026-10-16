@@ -28,12 +28,26 @@ async function registration(): Promise<ServiceWorkerRegistration | null> {
   return navigator.serviceWorker.ready;
 }
 
+export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
+
+/** État de la permission sans rien demander (le pré-écran NotifPrimer décide quand demander). */
+export function notifPermission(): NotifPermission {
+  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return "unsupported";
+  }
+  return Notification.permission;
+}
+
+/**
+ * Abonne l'appareil. La demande système n'est faite que si la permission n'est pas encore accordée :
+ * ce cas n'est atteint que par « Activer les alertes » du pré-écran.
+ */
 export async function enablePush(c: Criteria): Promise<PushResult> {
   const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!key) return "not-configured";
   const reg = await registration();
   if (!reg) return "unsupported";
-  const perm = await Notification.requestPermission();
+  const perm = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
   if (perm !== "granted") return "denied";
   try {
     const sub =

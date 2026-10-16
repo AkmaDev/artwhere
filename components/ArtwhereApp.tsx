@@ -30,7 +30,7 @@ import {
   type ProfilePrompt,
 } from "@/lib/profile";
 import { deleteProfile, sendProfile } from "@/lib/profile-client";
-import { disablePush, enablePush, updatePush, type Criteria } from "@/lib/push-client";
+import { disablePush, enablePush, notifPermission, updatePush, type Criteria, type PushResult } from "@/lib/push-client";
 import { matchesShortcut, SHORTCUT_IDS, type ShortcutId } from "@/lib/shortcuts";
 import type { EventItem } from "@/lib/types";
 import { getUrgency, isLastChance, urgencyEnd } from "@/lib/urgency";
@@ -43,6 +43,7 @@ import { Favorites } from "./Favorites";
 import { FreshnessFooter } from "./FreshnessFooter";
 import { InfoSheet } from "./InfoSheet";
 import { InstallSheet } from "./InstallSheet";
+import { NotifPrimer } from "./NotifPrimer";
 import { Onboarding } from "./Onboarding";
 import { ProfileFlow } from "./profile/ProfileFlow";
 import { ProfileInvite } from "./profile/ProfileInvite";
@@ -53,7 +54,8 @@ import { Toast } from "./ui";
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
 type Screen = "explore" | "favs" | "alerts";
-type ProfileUi = { kind: "invite"; variant: "invite" | "edit" } | { kind: "flow"; editing: boolean };
+type NotifPrompt = { seen: boolean; decision: "granted" | "denied" | "later" | null };
+type ProfileUi ={ kind: "invite"; variant: "invite" | "edit" } | { kind: "flow"; editing: boolean };
 type HomeFilter ={ kind: "shortcut"; id: ShortcutId } | { kind: "cat"; id: CategoryId } | { kind: "urgent" };
 const PAGE = 30;
 const ONGOING_PREVIEW = 4;
@@ -75,6 +77,8 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const [profile, setProfile, profileReady] = useStored<Profile>("profile", DEFAULT_PROFILE);
   const [prompt, setPrompt, promptReady] = useStored<ProfilePrompt>("profilePrompt", DEFAULT_PROFILE_PROMPT);
   const [profileUi, setProfileUi] = useState<ProfileUi | null>(null);
+  const [notifPrompt, setNotifPrompt, notifReady] = useStored<NotifPrompt>("notifPrompt", { seen: false, decision: null });
+  const [primerOpen, setPrimerOpen] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [areaBusy, setAreaBusy] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
@@ -302,12 +306,23 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     else flash(t("toast.favAdded"));
   };
 
+  // Pré-écran des notifications : seulement si la permission n'a jamais été demandée et que l'appareil peut
+  // recevoir des alertes (sur iPhone, uniquement l'appli installée). Jamais à l'ouverture de l'appli.
+  const canPrime = () => !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && notifPermission() === "default" && !(ios && !standalone);
+  const openPrimer = () => {
+    setNotifPrompt((p) => ({ ...p, seen: true }));
+    setPrimerOpen(true);
+  };
+  const maybePrime = () => {
+    if (notifReady && !notifPrompt.seen && canPrime()) setTimeout(openPrimer, 400);
+  };
+
   // « Plus tard » sur l'invitation, ou « × » avant d'avoir répondu : reproposé une seule fois, au 3e favori.
   const deferProfile = () => {
-    if (profileUi?.kind === "invite" ? profileUi.variant === "invite" : profileUi?.kind === "flow" && !profileUi.editing) {
-      setPrompt((p) => deferInvite(p, favIds.length));
-    }
+    const fromInvite = profileUi?.kind === "invite" && profileUi.variant === "invite";
+    if (fromInvite || (profileUi?.kind === "flow" && !profileUi.editing)) setPrompt((p) => deferInvite(p, favIds.length));
     setProfileUi(null);
+    if (fromInvite) maybePrime();
   };
 
   const finishProfile = async (ageRange: AgeRange | null, gender: Gender | null) => {
@@ -320,6 +335,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
     setPrompt((p) => ({ ...p, done: true }));
     setProfileUi(null);
     flash(t("profile.thanks"));
+    maybePrime();
   };
 
   const withdrawProfile = async () => {
@@ -501,15 +517,11 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const sourceNames = [...new Set(all.flatMap((e) => e.sources))].map((s) => (t.has(`sources.${s}`) ? t(`sources.${s}`) : s));
   const showBanner = !standalone && !bannerHidden && (ios || !!installEvt);
 
-  const toggleAlerts = async () => {
+  // Abonnement effectif. La demande système n'arrive ici que depuis le pré-écran (permission « default »)
+  // ou quand la permission est déjà accordée.
+  const activateAlerts = async (): Promise<PushResult> => {
     setAlertBusy(true);
     try {
-      if (alerts.on) {
-        await disablePush();
-        setAlerts({ ...alerts, on: false });
-        flash(t("alerts.off"));
-        return;
-      }
       const r = await enablePush(criteria);
       if (r === "ok") {
         lastSent.current = criteriaKey;
@@ -528,9 +540,41 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
                   : "alerts.failed",
           ),
         );
+      return r;
     } finally {
       setAlertBusy(false);
     }
+  };
+
+  const toggleAlerts = async () => {
+    if (alerts.on) {
+      setAlertBusy(true);
+      try {
+        await disablePush();
+        setAlerts({ ...alerts, on: false });
+        flash(t("alerts.off"));
+      } finally {
+        setAlertBusy(false);
+      }
+      return;
+    }
+    const perm = notifPermission();
+    if (ios && !standalone && perm !== "granted") return setSheet(true);
+    if (perm === "default") return openPrimer();
+    if (perm === "denied") return flash(t("alerts.denied"));
+    if (perm === "unsupported") return flash(t("alerts.unsupported"));
+    await activateAlerts();
+  };
+
+  const primerEnable = async () => {
+    const r = await activateAlerts();
+    setNotifPrompt((p) => ({ ...p, decision: r === "ok" ? "granted" : r === "denied" ? "denied" : p.decision }));
+    setPrimerOpen(false);
+  };
+
+  const primerLater = () => {
+    setNotifPrompt((p) => ({ ...p, decision: "later" }));
+    setPrimerOpen(false);
   };
 
   const tabs: [Screen, string][] = [
@@ -845,10 +889,11 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
             onWithdraw={withdrawProfile}
           />
         )}
+        {primerOpen && <NotifPrimer city={area?.name ?? ""} busy={alertBusy} onEnable={primerEnable} onLater={primerLater} />}
         <Toast text={toast} />
       </div>
 
-      {!detail && !search && profileUi?.kind !== "flow" && (
+      {!detail && !search && profileUi?.kind !== "flow" && !primerOpen && (
         <nav className="grid flex-none grid-cols-3 border-t border-line bg-white px-2 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
           {tabs.map(([id, name]) => {
             const on = screen === id;
