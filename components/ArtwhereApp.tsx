@@ -455,7 +455,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
   const geoWithLabel = async (lat: number, lng: number): Promise<NonNullable<Prefs["geo"]>> => {
     const r = await fetch(`/api/geo/reverse?lat=${lat}&lng=${lng}`).catch(() => null);
     const place = r?.ok ? ((await r.json()) as { place: Place }).place : null;
-    return { lat, lng, district: place?.district ?? null, postcode: place?.postcode ?? null };
+    return { lat, lng, street: place?.street ?? null, district: place?.district ?? null, postcode: place?.postcode ?? null };
   };
 
   const onGeo = () =>
@@ -463,7 +463,7 @@ export function ArtwhereApp({ cardVariant = "big" }: { cardVariant?: "big" | "co
       const r = await fetch(`/api/geo/reverse?lat=${lat}&lng=${lng}`).catch(() => null);
       const place = r?.ok ? ((await r.json()) as { place: Place }).place : null;
       if (!place) return flash(t("search.geoFailed"));
-      await pickPlace(place, { lat, lng, district: place.district ?? null, postcode: place.postcode ?? null });
+      await pickPlace(place, { lat, lng, street: place.street ?? null, district: place.district ?? null, postcode: place.postcode ?? null });
       flash(t("search.geoFound"));
     });
 

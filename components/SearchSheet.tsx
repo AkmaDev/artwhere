@@ -7,6 +7,7 @@ import { addDays, fmtMonthYear, fmtRange, shortcutRanges, weekday } from "@/lib/
 import type { Prefs } from "@/lib/device";
 import type { Moment } from "@/lib/types";
 import { CategoryPicker } from "./Onboarding";
+import { placeLabel } from "@/lib/neighborhood";
 import { Pill } from "./ui";
 
 export type Step = "where" | "when" | "what";
@@ -179,7 +180,7 @@ export function SearchSheet({ prefs, setPrefs, step, setStep, today, count, onCl
             </div>
           </div>
         ) : (
-          summary(t("where"), prefs.geo ? `${t("aroundMe")} · ${cityName}` : cityName, () => setStep("where"))
+          summary(t("where"), prefs.geo ? `${cityName} · ${placeLabel(prefs.geo) ?? t("aroundMe")}` : cityName, () => setStep("where"))
         )}
 
         {step === "when" ? (

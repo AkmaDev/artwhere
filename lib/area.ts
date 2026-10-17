@@ -19,6 +19,7 @@ export interface Place {
   lat: number;
   lng: number;
   /** Renseignés par le géocodage inverse (position de l'utilisateur). */
+  street?: string | null;
   district?: string | null;
   postcode?: string | null;
 }

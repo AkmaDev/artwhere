@@ -1,5 +1,6 @@
 import "server-only";
 import type { Place } from "./area";
+import { pickDistrict, pickStreet } from "./neighborhood";
 
 // Photon (komoot) : géocodeur OpenStreetMap gratuit, sans clé.
 const PHOTON = "https://photon.komoot.io";
@@ -17,6 +18,7 @@ interface Feature {
     countrycode?: string;
     type?: string;
     osm_value?: string;
+    street?: string;
     district?: string;
     locality?: string;
     postcode?: string;
@@ -59,7 +61,7 @@ export async function reversePlace(lat: number, lng: number, lang: string): Prom
   const f = body.features[0];
   const place = f ? toPlace(f, true) : null;
   if (!place) return null;
-  // Quartier vécu (ex. « Le Marais ») et code postal, pour le libellé de la position.
+  // Rue, quartier vécu et code postal, pour le libellé de la position (« Rue Rambuteau, 4e »).
   const p = f.properties;
-  return { ...place, lat, lng, district: p.district ?? p.locality ?? null, postcode: p.postcode ?? null };
+  return { ...place, lat, lng, street: pickStreet(p), district: pickDistrict(p), postcode: p.postcode ?? null };
 }
